@@ -1,0 +1,15 @@
+﻿@page
+@model EventsAndPolls.Pages.IndexModel
+@{
+     ViewData["Title"] = "Events & Polls";
+}
+
+<div class="text-center">
+     <h1 class="display-4">Welcome to Events & Polls</h1>
+     <p>A simple platform for creating events and conducting polls.</p>
+
+     <div class="mt-4">
+          <a asp-page="/Events/Create" class="btn btn-primary">Create New Event</a>
+          <a asp-page="/Events/Index" class="btn btn-secondary">Browse Events</a>
+     </div>
+</div>

@@ -1,0 +1,149 @@
+﻿@page
+@{
+     ViewData["Title"] = "Create Event";
+}
+
+<div class="container mt-4">
+     <h1>Create New Event</h1>
+
+     <div id="message" class="alert" style="display: none;"></div>
+
+     <form id="createEventForm">
+          <div class="mb-3">
+               <label for="title" class="form-label">Event Title *</label>
+               <input type="text" class="form-control" id="title" name="title" required
+                      placeholder="Enter event title">
+          </div>
+
+          <div class="mb-3">
+               <label for="description" class="form-label">Description *</label>
+               <textarea class="form-control" id="description" name="description" rows="3"
+                         placeholder="Enter event description" required></textarea>
+          </div>
+
+          <div class="row mb-3">
+               <div class="col-md-6">
+                    <label for="startDate" class="form-label">Start Date *</label>
+                    <input type="datetime-local" class="form-control" id="startDate" name="startDate" required>
+               </div>
+               <div class="col-md-6">
+                    <label for="endDate" class="form-label">End Date *</label>
+                    <input type="datetime-local" class="form-control" id="endDate" name="endDate" required>
+               </div>
+          </div>
+
+          <div class="mb-3">
+               <label for="location" class="form-label">Location *</label>
+               <input type="text" class="form-control" id="location" name="location"
+                      placeholder="Enter event location" required>
+          </div>
+
+          <div class="mb-3">
+               <label for="maxParticipants" class="form-label">Max Participants *</label>
+               <input type="number" class="form-control" id="maxParticipants" name="maxParticipants"
+                      min="1" value="100" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Create Event</button>
+          <a href="/Events" class="btn btn-secondary">Cancel</a>
+     </form>
+</div>
+
+@section Scripts {
+     <script>
+          document.getElementById('createEventForm').addEventListener('submit', async (e) => {
+              e.preventDefault();
+
+              // Show loading state
+              const submitBtn = e.target.querySelector('button[type="submit"]');
+              const originalText = submitBtn.textContent;
+              submitBtn.disabled = true;
+              submitBtn.textContent = 'Creating...';
+
+              // Get form data
+              const formData = {
+                  title: document.getElementById('title').value,
+                  description: document.getElementById('description').value,
+                  startDate: new Date(document.getElementById('startDate').value).toISOString(),
+                  endDate: new Date(document.getElementById('endDate').value).toISOString(),
+                  location: document.getElementById('location').value,
+                  maxParticipants: parseInt(document.getElementById('maxParticipants').value)
+              };
+
+              try {
+                  const response = await fetch('/api/events', {
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify(formData)
+                  });
+
+                  const result = await response.json();
+
+                  if (response.ok) {
+                      // Show success message
+                      showMessage('success', 'Event created successfully!');
+
+                      // Redirect after 1 second
+                      setTimeout(() => {
+                          window.location.href = '/Events';
+                      }, 1000);
+                  } else {
+                      // Show error message
+                      showMessage('error', result.error || 'Error creating event');
+                      submitBtn.disabled = false;
+                      submitBtn.textContent = originalText;
+                  }
+              } catch (error) {
+                  showMessage('error', 'Network error. Please try again.');
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = originalText;
+              }
+          });
+
+          function showMessage(type, text) {
+              const msgDiv = document.getElementById('message');
+              msgDiv.style.display = 'block';
+              msgDiv.className = `alert alert-${type === 'error' ? 'danger' : 'success'}`;
+              msgDiv.textContent = text;
+
+              // Auto hide after 5 seconds for success
+              if (type === 'success') {
+                  setTimeout(() => {
+                      msgDiv.style.display = 'none';
+                  }, 5000);
+              }
+          }
+
+          // Set default dates
+          document.addEventListener('DOMContentLoaded', function() {
+              const now = new Date();
+              const tomorrow = new Date(now);
+              tomorrow.setDate(tomorrow.getDate() + 1);
+
+              const startInput = document.getElementById('startDate');
+              const endInput = document.getElementById('endDate');
+
+              // Format: YYYY-MM-DDTHH:mm
+              const formatDate = (date) => {
+                  const year = date.getFullYear();
+                  const month = String(date.getMonth() + 1).padStart(2, '0');
+                  const day = String(date.getDate()).padStart(2, '0');
+                  const hours = String(date.getHours()).padStart(2, '0');
+                  const minutes = String(date.getMinutes()).padStart(2, '0');
+                  return `${year}-${month}-${day}T${hours}:${minutes}`;
+              };
+
+              if (!startInput.value) {
+                  startInput.value = formatDate(tomorrow);
+              }
+
+              if (!endInput.value) {
+                  const endDate = new Date(tomorrow);
+                  endDate.setHours(endDate.getHours() + 2);
+                  endInput.value = formatDate(endDate);
+              }
+          });
+     </script>
+}
