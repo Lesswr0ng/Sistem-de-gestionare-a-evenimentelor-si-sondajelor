@@ -4,6 +4,10 @@ namespace EventsAndPolls.Domain.Entities;
 
 public class Poll : BaseEntity
 {
+     public static PollBuilder CreateBuilder(string question, int eventId)
+     {
+          return new PollBuilder(question, eventId);
+     }
      public string Question { get; private set; } = string.Empty;
      public int EventId { get; private set; }
      public bool IsActive { get; private set; } = true;
@@ -34,4 +38,49 @@ public class Poll : BaseEntity
      }
 
      public void Close() => IsActive = false;
+}
+
+public class PollBuilder
+{
+     private readonly string _question;
+     private readonly int _eventId;
+     private readonly List<string> _options = new();
+     private bool _allowMultipleChoices;
+     private DateTime? _closesAt;
+
+     public PollBuilder(string question, int eventId)
+     {
+          _question = question;
+          _eventId = eventId;
+     }
+
+     public PollBuilder WithOptions(List<string> options)
+     {
+          _options.AddRange(options);
+          return this;
+     }
+
+     public PollBuilder AllowMultipleSelections(bool allow = true)
+     {
+          _allowMultipleChoices = allow;
+          return this;
+     }
+
+     public PollBuilder ClosesAt(DateTime? closesAt)
+     {
+          _closesAt = closesAt;
+          return this;
+     }
+
+     public Poll Build()
+     {
+          var poll = Poll.Create(_question, _eventId, _closesAt, _allowMultipleChoices);
+
+          foreach (var option in _options)
+          {
+               poll.AddOption(option);
+          }
+
+          return poll;
+     }
 }

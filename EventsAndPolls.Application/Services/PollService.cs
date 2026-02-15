@@ -1,4 +1,6 @@
-﻿using EventsAndPolls.Domain.Entities;
+﻿using EventsAndPolls.Application.DTOs.Requests;
+using EventsAndPolls.Application.DTOs.Responses;
+using EventsAndPolls.Domain.Entities;
 using EventsAndPolls.Domain.Interfaces;
 
 namespace EventsAndPolls.Application.Services;
@@ -14,70 +16,110 @@ public class PollService : IPollService
           _voteRepository = voteRepository;
      }
 
-     public async Task<Poll> CreatePollAsync(int eventId, string question, List<string> options, bool allowMultipleChoices = false)
+     public async Task<PollDto> CreatePollAsync(CreatePollDto createDto)
      {
-          var poll = Poll.Create(question, eventId, null, allowMultipleChoices);
+          // Use builder pattern
+          var pollBuilder = Poll.CreateBuilder(createDto.Question, createDto.EventId)
+              .WithOptions(createDto.Options)
+              .AllowMultipleSelections(createDto.AllowMultipleChoices);
 
-          foreach (var optionText in options)
-          {
-               poll.AddOption(optionText);
-          }
+          if (createDto.ClosesAt.HasValue)
+               pollBuilder.ClosesAt(createDto.ClosesAt.Value);
+
+          var poll = pollBuilder.Build();
 
           await _pollRepository.AddAsync(poll);
-          return poll;
+
+          return MapToDto(poll);
      }
 
-     public async Task<Poll?> GetPollByIdAsync(int id)
+     public async Task<PollDto?> GetPollByIdAsync(int id)
      {
-          return await _pollRepository.GetByIdAsync(id);
+          var poll = await _pollRepository.GetByIdAsync(id);
+          return poll == null ? null : MapToDto(poll);
      }
 
-     public async Task VoteAsync(int pollId, string userId, List<int> optionIds)
+     public async Task<IEnumerable<PollDto>> GetPollsByEventAsync(int eventId)
+     {
+          var polls = await _pollRepository.GetPollsByEventAsync(eventId);
+          return polls.Select(MapToDto);
+     }
+
+     public async Task<VoteResultDto> CastVoteAsync(CastVoteDto voteDto, string userId)
      {
           // Check if user already voted
-          var hasVoted = await _voteRepository.HasUserVotedAsync(pollId, userId);
+          var hasVoted = await _voteRepository.HasUserVotedAsync(voteDto.PollId, userId);
           if (hasVoted)
-               throw new Exception("User already voted");
+               throw new InvalidOperationException("User has already voted in this poll");
 
-          // Get poll
-          var poll = await _pollRepository.GetByIdAsync(pollId);
-          if (poll == null || !poll.IsActive)
-               throw new Exception("Poll not found or inactive");
+          var poll = await _pollRepository.GetByIdAsync(voteDto.PollId);
+          if (poll == null)
+               throw new ArgumentException($"Poll with ID {voteDto.PollId} not found");
 
-          // Validate single/multiple choice
-          if (!poll.AllowMultipleChoices && optionIds.Count > 1)
-               throw new Exception("This poll allows only single choice");
+          if (!poll.IsActive)
+               throw new InvalidOperationException("Poll is not active");
+
+          // Validate based on poll type
+          if (!poll.AllowMultipleChoices && voteDto.SelectedOptionIds.Count > 1)
+               throw new InvalidOperationException("This poll allows only single choice");
 
           // Create votes
-          foreach (var optionId in optionIds)
+          foreach (var optionId in voteDto.SelectedOptionIds)
           {
-               var vote = new Vote(userId, pollId, optionId);
+               var vote = new Vote(userId, voteDto.PollId, optionId);
                await _voteRepository.AddAsync(vote);
           }
+
+          var totalVotes = await _voteRepository.GetVoteCountAsync(voteDto.PollId);
+
+          return new VoteResultDto
+          {
+               Success = true,
+               Message = "Vote recorded successfully",
+               PollId = voteDto.PollId,
+               Timestamp = DateTime.UtcNow,
+               TotalVotes = totalVotes
+          };
      }
 
-     public async Task<Dictionary<int, int>> GetPollResultsAsync(int pollId)
+     public async Task<PollDto> GetPollResultsAsync(int pollId)
      {
           var poll = await _pollRepository.GetByIdAsync(pollId);
           if (poll == null)
-               return new Dictionary<int, int>();
+               throw new ArgumentException($"Poll with ID {pollId} not found");
 
-          var results = new Dictionary<int, int>();
-          foreach (var option in poll.Options)
-          {
-               // In real app, you'd query the database
-               results[option.Id] = 0; // Placeholder
-          }
-
-          return results;
+          return MapToDto(poll);
      }
+
      public async Task DeletePollAsync(int id)
      {
           await _pollRepository.DeleteAsync(id);
      }
 
-     public async Task<IEnumerable<Poll>> GetPollsByEventAsync(int eventId)
+     // Mapping method
+     private PollDto MapToDto(Poll poll)
      {
-          return await _pollRepository.GetPollsByEventAsync(eventId);
+          var totalVotes = poll.Votes?.Count ?? 0;
+
+          return new PollDto
+          {
+               Id = poll.Id,
+               Question = poll.Question,
+               EventId = poll.EventId,
+               IsActive = poll.IsActive,
+               AllowMultipleChoices = poll.AllowMultipleChoices,
+               ClosesAt = poll.ClosesAt,
+               TotalVotes = totalVotes,
+               CreatedAt = poll.CreatedAt,
+               Options = poll.Options?.Select(o => new PollOptionDto
+               {
+                    Id = o.Id,
+                    Text = o.Text,
+                    VoteCount = poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0,
+                    Percentage = totalVotes > 0
+                        ? (decimal)Math.Round((poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0) * 100.0 / totalVotes, 2)
+                        : 0
+               }).ToList() ?? new List<PollOptionDto>()
+          };
      }
 }

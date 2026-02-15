@@ -1,5 +1,6 @@
-﻿using EventsAndPolls.Application.Services;
-using EventsAndPolls.Application.ViewModels;
+﻿using EventsAndPolls.Application.DTOs.Requests;
+using EventsAndPolls.Application.DTOs.Responses;
+using EventsAndPolls.Application.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventsAndPolls.Controllers.Api;
@@ -9,114 +10,70 @@ namespace EventsAndPolls.Controllers.Api;
 public class PollsController : ControllerBase
 {
      private readonly IPollService _pollService;
-     private readonly IVoteService _voteService;
      private readonly ILogger<PollsController> _logger;
 
-     public PollsController(
-         IPollService pollService,
-         IVoteService voteService,
-         ILogger<PollsController> logger)
+     public PollsController(IPollService pollService, ILogger<PollsController> logger)
      {
           _pollService = pollService;
-          _voteService = voteService;
           _logger = logger;
      }
 
-     // GET: api/polls/{id}
      [HttpGet("{id}")]
-     public async Task<ActionResult<PollViewModel>> GetPoll(int id)
+     public async Task<ActionResult<PollDto>> GetPoll(int id)
      {
           try
           {
                var poll = await _pollService.GetPollByIdAsync(id);
-
                if (poll == null)
                     return NotFound(new { error = $"Poll with ID {id} not found" });
 
-               var result = new PollViewModel
-               {
-                    Id = poll.Id,
-                    Question = poll.Question,
-                    EventId = poll.EventId,
-                    IsActive = poll.IsActive,
-                    AllowMultipleChoices = poll.AllowMultipleChoices,
-                    TotalVotes = poll.Votes?.Count ?? 0,
-                    Options = poll.Options?.Select(o => new PollOptionViewModel
-                    {
-                         Id = o.Id,
-                         Text = o.Text,
-                         VoteCount = poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0
-                    }).ToList() ?? new List<PollOptionViewModel>()
-               };
-
-               return Ok(result);
+               return Ok(poll);
           }
           catch (Exception ex)
           {
                _logger.LogError(ex, "Error getting poll {PollId}", id);
-               return StatusCode(500, new { error = "An error occurred while retrieving the poll" });
+               return StatusCode(500, new { error = "An error occurred" });
           }
      }
 
-     // POST: api/polls
      [HttpPost]
-     public async Task<ActionResult<PollViewModel>> CreatePoll([FromBody] CreatePollViewModel model)
+     public async Task<ActionResult<PollDto>> CreatePoll([FromBody] CreatePollDto createDto)
      {
           try
           {
                if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-               var createdPoll = await _pollService.CreatePollAsync(
-                   model.EventId,
-                   model.Question,
-                   model.Options,
-                   model.AllowMultipleChoices);
-
-               var result = new PollViewModel
-               {
-                    Id = createdPoll.Id,
-                    Question = createdPoll.Question,
-                    EventId = createdPoll.EventId,
-                    IsActive = createdPoll.IsActive,
-                    AllowMultipleChoices = createdPoll.AllowMultipleChoices,
-                    Options = createdPoll.Options?.Select(o => new PollOptionViewModel
-                    {
-                         Id = o.Id,
-                         Text = o.Text
-                    }).ToList() ?? new List<PollOptionViewModel>()
-               };
-
-               return CreatedAtAction(nameof(GetPoll), new { id = createdPoll.Id }, result);
-          }
-          catch (ArgumentException ex)
-          {
-               return BadRequest(new { error = ex.Message });
+               var result = await _pollService.CreatePollAsync(createDto);
+               return CreatedAtAction(nameof(GetPoll), new { id = result.Id }, result);
           }
           catch (Exception ex)
           {
                _logger.LogError(ex, "Error creating poll");
-               return StatusCode(500, new { error = "An error occurred while creating the poll" });
+               return StatusCode(500, new { error = ex.Message });
           }
      }
 
-     // POST: api/polls/{id}/votes
      [HttpPost("{id}/votes")]
-     public async Task<IActionResult> CastVote(int id, [FromBody] VoteViewModel model)
+     public async Task<ActionResult<VoteResultDto>> CastVote(int id, [FromBody] CastVoteDto voteDto)
      {
           try
           {
+               if (id != voteDto.PollId)
+                    return BadRequest(new { error = "Poll ID mismatch" });
+
                if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-               if (model.SelectedOptionIds == null || !model.SelectedOptionIds.Any())
-                    return BadRequest(new { error = "At least one option must be selected" });
+               // In real app, get from authentication
+               var userId = User.Identity?.Name ?? "anonymous-user";
 
-               var userId = "voter-user"; // In real app, get from authentication
-
-               await _pollService.VoteAsync(id, userId, model.SelectedOptionIds);
-
-               return Ok(new { message = "Vote recorded successfully" });
+               var result = await _pollService.CastVoteAsync(voteDto, userId);
+               return Ok(result);
+          }
+          catch (ArgumentException ex)
+          {
+               return NotFound(new { error = ex.Message });
           }
           catch (InvalidOperationException ex)
           {
@@ -125,49 +82,29 @@ public class PollsController : ControllerBase
           catch (Exception ex)
           {
                _logger.LogError(ex, "Error casting vote for poll {PollId}", id);
-               return StatusCode(500, new { error = "An error occurred while casting the vote" });
+               return StatusCode(500, new { error = "An error occurred" });
           }
      }
 
-     // GET: api/polls/{id}/results
      [HttpGet("{id}/results")]
-     public async Task<ActionResult<PollResultsViewModel>> GetPollResults(int id)
+     public async Task<ActionResult<PollDto>> GetPollResults(int id)
      {
           try
           {
-               var poll = await _pollService.GetPollByIdAsync(id);
-
-               if (poll == null)
-                    return NotFound(new { error = $"Poll with ID {id} not found" });
-
-               var totalVotes = poll.Votes?.Count ?? 0;
-
-               var results = new PollResultsViewModel
-               {
-                    PollId = poll.Id,
-                    Question = poll.Question,
-                    TotalVotes = totalVotes,
-                    OptionResults = poll.Options?.Select(o => new PollOptionResultViewModel
-                    {
-                         OptionId = o.Id,
-                         Text = o.Text,
-                         VoteCount = poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0,
-                         Percentage = totalVotes > 0
-                            ? Math.Round((poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0) * 100.0 / totalVotes, 2)
-                            : 0
-                    }).OrderByDescending(r => r.VoteCount).ToList() ?? new List<PollOptionResultViewModel>()
-               };
-
+               var results = await _pollService.GetPollResultsAsync(id);
                return Ok(results);
+          }
+          catch (ArgumentException ex)
+          {
+               return NotFound(new { error = ex.Message });
           }
           catch (Exception ex)
           {
                _logger.LogError(ex, "Error getting results for poll {PollId}", id);
-               return StatusCode(500, new { error = "An error occurred while retrieving poll results" });
+               return StatusCode(500, new { error = "An error occurred" });
           }
      }
 
-     // DELETE: api/polls/{id}
      [HttpDelete("{id}")]
      public async Task<IActionResult> DeletePoll(int id)
      {
@@ -179,7 +116,7 @@ public class PollsController : ControllerBase
           catch (Exception ex)
           {
                _logger.LogError(ex, "Error deleting poll {PollId}", id);
-               return StatusCode(500, new { error = "An error occurred while deleting the poll" });
+               return StatusCode(500, new { error = "An error occurred" });
           }
      }
 }
