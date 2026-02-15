@@ -1,13 +1,14 @@
-﻿using EventsAndPolls.Domain.Entities;
+﻿using EventsAndPolls.Application.DTOs.Requests;
+using EventsAndPolls.Application.DTOs.Responses;
 
 namespace EventsAndPolls.Application.Services;
 
 public interface IPollService
 {
-     Task<Poll> CreatePollAsync(int eventId, string question, List<string> options, bool allowMultipleChoices = false);
-     Task<Poll?> GetPollByIdAsync(int id);
-     Task VoteAsync(int pollId, string userId, List<int> optionIds);
-     Task<Dictionary<int, int>> GetPollResultsAsync(int pollId);
+     Task<PollDto> CreatePollAsync(CreatePollDto createDto);
+     Task<PollDto?> GetPollByIdAsync(int id);
+     Task<IEnumerable<PollDto>> GetPollsByEventAsync(int eventId);
+     Task<VoteResultDto> CastVoteAsync(CastVoteDto voteDto, string userId);
+     Task<PollDto> GetPollResultsAsync(int pollId);
      Task DeletePollAsync(int id);
-     Task<IEnumerable<Poll>> GetPollsByEventAsync(int eventId);
 }

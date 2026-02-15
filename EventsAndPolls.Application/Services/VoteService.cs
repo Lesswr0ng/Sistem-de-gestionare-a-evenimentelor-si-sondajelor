@@ -1,0 +1,104 @@
+﻿using EventsAndPolls.Domain.Entities;
+using EventsAndPolls.Domain.Interfaces;
+using Microsoft.Extensions.Logging;
+
+namespace EventsAndPolls.Application.Services;
+
+public class VoteService : IVoteService
+{
+     private readonly IVoteRepository _voteRepository;
+     private readonly ILogger<VoteService> _logger;
+
+     public VoteService(IVoteRepository voteRepository, ILogger<VoteService> logger)
+     {
+          _voteRepository = voteRepository;
+          _logger = logger;
+     }
+
+     public async Task<IEnumerable<Vote>> GetVotesByPollAsync(int pollId)
+     {
+          try
+          {
+               // In a real app, you'd have a method in IVoteRepository for this
+               // For now, we'll get all votes and filter
+               var allVotes = await _voteRepository.GetAllAsync();
+               return allVotes.Where(v => v.PollId == pollId);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error getting votes for poll {PollId}", pollId);
+               throw;
+          }
+     }
+
+     public async Task<IEnumerable<Vote>> GetVotesByUserAsync(string userId)
+     {
+          try
+          {
+               var allVotes = await _voteRepository.GetAllAsync();
+               return allVotes.Where(v => v.UserId == userId);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error getting votes for user {UserId}", userId);
+               throw;
+          }
+     }
+
+     public async Task<int> GetVoteCountForPollAsync(int pollId)
+     {
+          try
+          {
+               return await _voteRepository.GetVoteCountAsync(pollId);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error getting vote count for poll {PollId}", pollId);
+               throw;
+          }
+     }
+
+     public async Task<bool> HasUserVotedAsync(int pollId, string userId)
+     {
+          try
+          {
+               return await _voteRepository.HasUserVotedAsync(pollId, userId);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error checking if user voted in poll {PollId}", pollId);
+               throw;
+          }
+     }
+
+     public async Task DeleteVoteAsync(int id)
+     {
+          try
+          {
+               await _voteRepository.DeleteAsync(id);
+               _logger.LogInformation("Vote {VoteId} deleted successfully", id);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error deleting vote {VoteId}", id);
+               throw;
+          }
+     }
+
+     public async Task<IEnumerable<Vote>> GetRecentVotesAsync(int pollId, int count = 10)
+     {
+          try
+          {
+               var allVotes = await _voteRepository.GetAllAsync();
+               return allVotes
+                   .Where(v => v.PollId == pollId)
+                   .OrderByDescending(v => v.CreatedAt)
+                   .Take(count);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error getting recent votes for poll {PollId}", pollId);
+               throw;
+          }
+     }
+}

@@ -61,23 +61,21 @@
               submitBtn.textContent = 'Creating...';
 
               // Get form data
-              const formData = {
-                  title: document.getElementById('title').value,
-                  description: document.getElementById('description').value,
-                  startDate: new Date(document.getElementById('startDate').value).toISOString(),
-                  endDate: new Date(document.getElementById('endDate').value).toISOString(),
-                  location: document.getElementById('location').value,
-                  maxParticipants: parseInt(document.getElementById('maxParticipants').value)
-              };
+               const createDto = {
+                   title: document.getElementById('title').value,
+                   description: document.getElementById('description').value,
+                   startDate: new Date(document.getElementById('startDate').value).toISOString(),
+                   endDate: new Date(document.getElementById('endDate').value).toISOString(),
+                   location: document.getElementById('location').value,
+                   maxParticipants: parseInt(document.getElementById('maxParticipants').value)
+               };
 
               try {
-                  const response = await fetch('/api/events', {
-                      method: 'POST',
-                      headers: {
-                          'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify(formData)
-                  });
+                    const response = await fetch('/api/events', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(createDto)  // Send CreateEventDto
+                    });
 
                   const result = await response.json();
 

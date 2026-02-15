@@ -18,6 +18,7 @@ builder.Services.AddScoped<IVoteRepository, VoteRepository>();
 
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IPollService, PollService>();
+builder.Services.AddScoped<IVoteService, VoteService>();
 
 var app = builder.Build();
 
