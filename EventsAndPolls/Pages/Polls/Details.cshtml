@@ -1,0 +1,173 @@
+﻿@page
+@{
+     Layout = "_Layout";
+     ViewData["Title"] = "Poll Details";
+     var pollId = Request.Query["id"];
+}
+
+<div class="container mt-4">
+     <div id="message" class="alert" style="display: none;"></div>
+
+     <div id="loadingSpinner" class="text-center">
+          <div class="spinner-border text-primary" role="status">
+               <span class="visually-hidden">Loading...</span>
+          </div>
+     </div>
+
+     <div id="pollDetails" style="display: none;">
+          <h1 id="pollQuestion"></h1>
+          <p class="text-muted" id="pollStatus"></p>
+
+          <div class="row">
+               <div class="col-md-6">
+                    <div class="card">
+                         <div class="card-header">
+                              <h5>Vote</h5>
+                         </div>
+                         <div class="card-body">
+                              <div id="voteOptions"></div>
+                              <button id="submitVote" class="btn btn-primary mt-3">Submit Vote</button>
+                         </div>
+                    </div>
+               </div>
+
+               <div class="col-md-6">
+                    <div class="card">
+                         <div class="card-header">
+                              <h5>Results</h5>
+                         </div>
+                         <div class="card-body">
+                              <div id="results"></div>
+                         </div>
+                    </div>
+               </div>
+          </div>
+     </div>
+
+     <div class="mt-3">
+          <a href="javascript:history.back()" class="btn btn-secondary">Back</a>
+     </div>
+</div>
+
+@section Scripts {
+     <script>
+          const pollId = new URLSearchParams(window.location.search).get('id');
+          let pollData = null;
+
+          async function loadPoll() {
+              try {
+                  const response = await fetch(`/api/polls/${pollId}`);
+                  if (!response.ok) throw new Error('Poll not found');
+                  pollData = await response.json();
+
+                  document.getElementById('pollQuestion').textContent = pollData.question;
+                  document.getElementById('pollStatus').textContent = pollData.isActive ? 'Active' : 'Closed';
+
+                  renderVoteOptions();
+                  renderResults();
+
+                  document.getElementById('loadingSpinner').style.display = 'none';
+                  document.getElementById('pollDetails').style.display = 'block';
+              } catch (error) {
+                  showMessage('danger', 'Error loading poll');
+                  document.getElementById('loadingSpinner').innerHTML = '<p class="text-danger">Poll not found</p>';
+              }
+          }
+
+          function renderVoteOptions() {
+              const container = document.getElementById('voteOptions');
+              let html = '';
+
+              if (!pollData.isActive) {
+                  container.innerHTML = '<p class="text-muted">This poll is closed.</p>';
+                  document.getElementById('submitVote').disabled = true;
+                  return;
+              }
+
+              pollData.options.forEach(option => {
+                  html += `
+                      <div class="form-check">
+                          <input class="form-check-input" type="${pollData.allowMultipleChoices ? 'checkbox' : 'radio'}"
+                                 name="voteOption" value="${option.id}" id="opt${option.id}">
+                          <label class="form-check-label" for="opt${option.id}">
+                              ${option.text}
+                          </label>
+                      </div>
+                  `;
+              });
+              container.innerHTML = html;
+          }
+
+          function renderResults() {
+              const container = document.getElementById('results');
+              if (!pollData.options || pollData.options.length === 0) {
+                  container.innerHTML = '<p>No results yet.</p>';
+                  return;
+              }
+
+              let html = '<ul class="list-group">';
+              pollData.options.forEach(option => {
+                  const percentage = option.percentage || 0;
+                  html += `
+                      <li class="list-group-item d-flex justify-content-between align-items-center">
+                          ${option.text}
+                          <span class="badge bg-primary rounded-pill">${option.voteCount} votes (${percentage}%)</span>
+                      </li>
+                  `;
+              });
+              html += '</ul>';
+              container.innerHTML = html;
+          }
+
+          document.getElementById('submitVote').addEventListener('click', async function() {
+              const selected = [];
+              document.querySelectorAll('input[name="voteOption"]:checked').forEach(cb => {
+                  selected.push(parseInt(cb.value));
+              });
+
+              if (selected.length === 0) {
+                  showMessage('warning', 'Please select at least one option.');
+                  return;
+              }
+
+              if (!pollData.allowMultipleChoices && selected.length > 1) {
+                  showMessage('warning', 'This poll allows only one choice.');
+                  return;
+              }
+
+              const voteData = {
+                  pollId: pollId,
+                  selectedOptionIds: selected
+              };
+
+              try {
+                  const response = await fetch(`/api/polls/${pollId}/votes`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(voteData)
+                  });
+
+                  if (response.ok) {
+                      showMessage('success', 'Vote recorded!');
+                      // Refresh results
+                      setTimeout(() => loadPoll(), 1000);
+                  } else {
+                      const error = await response.json();
+                      showMessage('danger', error.error || 'Error voting');
+                  }
+              } catch (error) {
+                  showMessage('danger', 'Network error');
+              }
+          });
+
+          function showMessage(type, text) {
+              const msg = document.getElementById('message');
+              msg.style.display = 'block';
+              msg.className = `alert alert-${type}`;
+              msg.textContent = text;
+              setTimeout(() => { msg.style.display = 'none'; }, 5000);
+          }
+
+          loadPoll();
+     </script>
+}

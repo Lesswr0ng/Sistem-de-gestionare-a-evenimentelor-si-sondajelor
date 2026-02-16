@@ -1,5 +1,6 @@
 ﻿@page
 @{
+     Layout = "_Layout";
      ViewData["Title"] = "Events";
 }
 
@@ -10,41 +11,51 @@
           <a href="/Events/Create" class="btn btn-primary">Create New Event</a>
      </div>
 
-     <div id="message" class="alert" style="display: none;"></div>
-
      <div id="eventsList" class="row">
-          <div class="text-center">
+          <div class="col-12 text-center">
                <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Loading...</span>
                </div>
+               <p class="mt-2">Loading events...</p>
           </div>
      </div>
 </div>
 
 @section Scripts {
      <script>
+          console.log('Events page loaded, loading events...');
+
           async function loadEvents() {
+              console.log('loadEvents function called');
+
+              const container = document.getElementById('eventsList');
+              if (!container) {
+                  console.error('ERROR: eventsList element not found in DOM!');
+                  console.log('Available elements with IDs:',
+                      Array.from(document.querySelectorAll('[id]')).map(el => el.id));
+                  return;
+              }
+
               try {
+                  console.log('Fetching from /api/events...');
                   const response = await fetch('/api/events');
+                  console.log('Response received:', response.status);
+
+                  if (!response.ok) {
+                      throw new Error(`HTTP error! status: ${response.status}`);
+                  }
+
                   const events = await response.json();
+                  console.log('Events data:', events);
 
-                  const container = document.getElementById('eventsList');
-
-                  if (events.length === 0) {
+                  if (!events || events.length === 0) {
                       container.innerHTML = '<div class="col-12 text-center py-5"><p class="lead">No events found. Create the first one!</p></div>';
                       return;
                   }
 
                   let html = '';
                   events.forEach(event => {
-                      const startDate = new Date(event.startDate).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                      });
-
+                      const startDate = new Date(event.startDate).toLocaleString();
                       html += `
                           <div class="col-md-4 mb-4">
                               <div class="card h-100">
@@ -53,15 +64,12 @@
                                       <p class="card-text">${event.description.substring(0, 100)}${event.description.length > 100 ? '...' : ''}</p>
                                       <p class="card-text">
                                           <small class="text-muted">
-                                              <i class="bi bi-calendar"></i> ${startDate}<br>
-                                              <i class="bi bi-geo-alt"></i> ${event.location}<br>
-                                              <i class="bi bi-people"></i> Max: ${event.maxParticipants} | Polls: ${event.pollCount}
+                                              📅 ${startDate}<br>
+                                              📍 ${event.location}<br>
+                                              👥 Max: ${event.maxParticipants} | 📊 Polls: ${event.pollCount}
                                           </small>
                                       </p>
-                                      <a href="/Events/Details?id=${event.id}" class="btn btn-outline-primary btn-sm">View Details</a>
-                                  </div>
-                                  <div class="card-footer">
-                                      <small class="text-muted">Created: ${new Date(event.createdAt).toLocaleDateString()}</small>
+                                      <a href="/Events/Details/${event.id}" class="btn btn-outline-primary btn-sm">View Details</a>
                                   </div>
                               </div>
                           </div>
@@ -71,29 +79,22 @@
                   container.innerHTML = html;
 
               } catch (error) {
-                  console.error('Error:', error);
-                  document.getElementById('eventsList').innerHTML = `
-                      <div class="col-12 text-center text-danger">
-                          <p>Error loading events. Please try again.</p>
-                      </div>
-                  `;
-
-                  showMessage('error', 'Failed to load events');
+                  console.error('Error in loadEvents:', error);
+                  if (container) {
+                      container.innerHTML = `
+                          <div class="col-12 text-center text-danger">
+                              <p>Error loading events: ${error.message}</p>
+                              <button onclick="loadEvents()" class="btn btn-primary mt-3">Retry</button>
+                          </div>
+                      `;
+                  }
               }
           }
 
-          function showMessage(type, text) {
-              const msgDiv = document.getElementById('message');
-              msgDiv.style.display = 'block';
-              msgDiv.className = `alert alert-${type === 'error' ? 'danger' : 'info'}`;
-              msgDiv.textContent = text;
-
-              setTimeout(() => {
-                  msgDiv.style.display = 'none';
-              }, 3000);
-          }
-
-          // Load events when page loads
-          loadEvents();
+          // Run when page loads
+          document.addEventListener('DOMContentLoaded', function() {
+              console.log('DOM fully loaded, calling loadEvents');
+              loadEvents();
+          });
      </script>
 }

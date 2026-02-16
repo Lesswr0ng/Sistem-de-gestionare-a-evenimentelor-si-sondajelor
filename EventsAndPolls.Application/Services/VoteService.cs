@@ -19,10 +19,7 @@ public class VoteService : IVoteService
      {
           try
           {
-               // In a real app, you'd have a method in IVoteRepository for this
-               // For now, we'll get all votes and filter
-               var allVotes = await _voteRepository.GetAllAsync();
-               return allVotes.Where(v => v.PollId == pollId);
+               return await _voteRepository.GetVotesByPollIdAsync(pollId);
           }
           catch (Exception ex)
           {
@@ -35,8 +32,7 @@ public class VoteService : IVoteService
      {
           try
           {
-               var allVotes = await _voteRepository.GetAllAsync();
-               return allVotes.Where(v => v.UserId == userId);
+               return await _voteRepository.GetVotesByUserIdAsync(userId);
           }
           catch (Exception ex)
           {

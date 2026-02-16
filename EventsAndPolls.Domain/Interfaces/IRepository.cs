@@ -27,4 +27,6 @@ public interface IVoteRepository : IRepository<Vote>
 {
      Task<bool> HasUserVotedAsync(int pollId, string userId);
      Task<int> GetVoteCountAsync(int pollId);
+     Task<IEnumerable<Vote>> GetVotesByPollIdAsync(int pollId);
+     Task<IEnumerable<Vote>> GetVotesByUserIdAsync(string userId);
 }
