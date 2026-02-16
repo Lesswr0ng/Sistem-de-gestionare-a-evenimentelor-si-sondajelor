@@ -18,6 +18,7 @@ public class PollRepository : IPollRepository
      {
           return await _context.Polls
               .Include(p => p.Options)
+              .Include(p => p.Votes)
               .FirstOrDefaultAsync(p => p.Id == id);
      }
 
@@ -51,8 +52,9 @@ public class PollRepository : IPollRepository
      public async Task<IEnumerable<Poll>> GetPollsByEventAsync(int eventId)
      {
           return await _context.Polls
-              .Where(p => p.EventId == eventId && p.IsActive)
+              .Where(p => p.EventId == eventId)
               .Include(p => p.Options)
+              .Include(p => p.Votes)
               .ToListAsync();
      }
 }

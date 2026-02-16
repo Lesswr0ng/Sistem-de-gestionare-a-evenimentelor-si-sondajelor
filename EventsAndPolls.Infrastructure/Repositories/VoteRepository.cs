@@ -57,4 +57,20 @@ public class VoteRepository : IVoteRepository
           return await _context.Votes
               .CountAsync(v => v.PollId == pollId);
      }
+     public async Task<IEnumerable<Vote>> GetVotesByPollIdAsync(int pollId)
+     {
+          return await _context.Votes
+              .Where(v => v.PollId == pollId)
+              .Include(v => v.PollOption)
+              .ToListAsync();
+     }
+
+     public async Task<IEnumerable<Vote>> GetVotesByUserIdAsync(string userId)
+     {
+          return await _context.Votes
+              .Where(v => v.UserId == userId)
+              .Include(v => v.Poll)
+              .ThenInclude(p => p.Event)
+              .ToListAsync();
+     }
 }

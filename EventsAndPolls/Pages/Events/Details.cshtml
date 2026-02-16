@@ -1,0 +1,157 @@
+﻿@page "{id}"
+@{
+     Layout = "_Layout";
+     ViewData["Title"] = "Event Details";
+}
+
+<div class="container mt-4">
+     <div id="message" class="alert" style="display: none;"></div>
+
+     <div id="loadingSpinner" class="text-center">
+          <div class="spinner-border text-primary" role="status">
+               <span class="visually-hidden">Loading...</span>
+          </div>
+     </div>
+
+     <div id="eventDetails" style="display: none;">
+          <h1 id="eventTitle"></h1>
+          <p id="eventDescription" class="lead"></p>
+
+          <div class="row mt-4">
+               <div class="col-md-8">
+                    <div class="card mb-4">
+                         <div class="card-header">
+                              <h5>Polls</h5>
+                         </div>
+                         <div class="card-body">
+                              <div id="pollsList">
+                                   <p class="text-muted">Loading polls...</p>
+                              </div>
+                              <a href="/Polls/Create?eventId=@(ViewContext.RouteData.Values["id"])" class="btn btn-success mt-3">Create New Poll</a>
+                         </div>
+                    </div>
+               </div>
+
+               <div class="col-md-4">
+                    <div class="card">
+                         <div class="card-header">
+                              <h5>Event Info</h5>
+                         </div>
+                         <div class="card-body">
+                              <ul class="list-unstyled">
+                                   <li><strong>Start:</strong> <span id="startDate"></span></li>
+                                   <li><strong>End:</strong> <span id="endDate"></span></li>
+                                   <li><strong>Location:</strong> <span id="location"></span></li>
+                                   <li><strong>Max Participants:</strong> <span id="maxParticipants"></span></li>
+                                   <li><strong>Created:</strong> <span id="createdAt"></span></li>
+                              </ul>
+                         </div>
+                    </div>
+               </div>
+          </div>
+     </div>
+
+     <div class="mt-3">
+          <a href="/Events" class="btn btn-secondary">Back to Events</a>
+     </div>
+</div>
+
+@section Scripts {
+     <script>
+          console.log('🔵 Details page loaded');
+
+          // Get event ID from URL path (e.g., /Events/Details/2)
+          const pathParts = window.location.pathname.split('/');
+          const eventId = pathParts[pathParts.length - 1];
+
+          console.log('📌 Event ID:', eventId);
+
+          // Set the create poll link
+          const createPollLink = document.getElementById('createPollLink');
+          if (createPollLink) {
+              createPollLink.href = `/Polls/Create?eventId=${eventId}`;
+              console.log('📌 Create poll link set to:', createPollLink.href);
+          }
+
+          async function loadEventDetails() {
+              try {
+                  console.log('📡 Fetching event:', eventId);
+                  const response = await fetch(`/api/events/${eventId}`);
+
+                  if (!response.ok) {
+                      throw new Error(`Event not found (${response.status})`);
+                  }
+
+                  const event = await response.json();
+                  console.log('📦 Event data:', event);
+
+                  // Update page with event data
+                  document.getElementById('eventTitle').textContent = event.title;
+                  document.getElementById('eventDescription').textContent = event.description;
+                  document.getElementById('startDate').textContent = new Date(event.startDate).toLocaleString();
+                  document.getElementById('endDate').textContent = new Date(event.endDate).toLocaleString();
+                  document.getElementById('location').textContent = event.location;
+                  document.getElementById('maxParticipants').textContent = event.maxParticipants;
+                  document.getElementById('createdAt').textContent = new Date(event.createdAt).toLocaleDateString();
+
+                  // Hide spinner, show details
+                  document.getElementById('loadingSpinner').style.display = 'none';
+                  document.getElementById('eventDetails').style.display = 'block';
+
+                  // Load polls
+                  loadPolls();
+
+              } catch (error) {
+                  console.error('❌ Error:', error);
+                  document.getElementById('loadingSpinner').innerHTML = `
+                      <div class="alert alert-danger">
+                          Error loading event: ${error.message}
+                      </div>
+                  `;
+              }
+          }
+
+          async function loadPolls() {
+              try {
+                  console.log('📡 Fetching polls for event:', eventId);
+                  const response = await fetch(`/api/events/${eventId}/polls`);
+
+                  if (!response.ok) {
+                      throw new Error(`Failed to load polls (${response.status})`);
+                  }
+
+                  const polls = await response.json();
+                  console.log('📦 Polls data:', polls);
+
+                  const container = document.getElementById('pollsList');
+
+                  if (!polls || polls.length === 0) {
+                      container.innerHTML = '<p class="text-muted">No polls yet for this event.</p>';
+                      return;
+                  }
+
+                  let html = '';
+                  polls.forEach(poll => {
+                      html += `
+                          <div class="card mb-2">
+                              <div class="card-body">
+                                  <h6>${poll.question}</h6>
+                                  <small class="text-muted">Total votes: ${poll.totalVotes || 0}</small>
+                                  <a href="/Polls/Details?id=${poll.id}" class="btn btn-sm btn-outline-primary float-end">View Poll</a>
+                              </div>
+                          </div>
+                      `;
+                  });
+
+                  container.innerHTML = html;
+
+              } catch (error) {
+                  console.error('❌ Error loading polls:', error);
+                  document.getElementById('pollsList').innerHTML = '<p class="text-danger">Error loading polls</p>';
+              }
+          }
+
+          // Start loading
+          loadEventDetails();
+     </script>
+}

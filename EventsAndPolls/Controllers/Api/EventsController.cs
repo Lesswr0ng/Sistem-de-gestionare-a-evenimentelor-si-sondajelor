@@ -11,11 +11,13 @@ public class EventsController : ControllerBase
 {
      private readonly IEventService _eventService;
      private readonly ILogger<EventsController> _logger;
+     private readonly IPollService _pollService;
 
-     public EventsController(IEventService eventService, ILogger<EventsController> logger)
+     public EventsController(IEventService eventService, ILogger<EventsController> logger, IPollService pollService)
      {
           _eventService = eventService;
           _logger = logger;
+          _pollService = pollService;
      }
 
      [HttpGet]
@@ -110,6 +112,31 @@ public class EventsController : ControllerBase
           {
                _logger.LogError(ex, "Error deleting event {EventId}", id);
                return StatusCode(500, new { error = "An error occurred" });
+          }
+     }
+     [HttpGet("{id}/polls")]
+     public async Task<ActionResult<IEnumerable<PollDto>>> GetEventPolls(int id)
+     {
+          try
+          {
+               Console.WriteLine($"GET /api/events/{id}/polls called");
+
+               // First check if event exists
+               var eventExists = await _eventService.GetEventByIdAsync(id);
+               if (eventExists == null)
+               {
+                    return NotFound(new { error = $"Event with ID {id} not found" });
+               }
+
+               // Get polls for this event
+               var polls = await _pollService.GetPollsByEventAsync(id);
+
+               return Ok(polls);
+          }
+          catch (Exception ex)
+          {
+               Console.WriteLine($"Error getting polls for event {id}: {ex.Message}");
+               return StatusCode(500, new { error = ex.Message });
           }
      }
 }
