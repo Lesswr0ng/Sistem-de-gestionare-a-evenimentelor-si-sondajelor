@@ -21,6 +21,15 @@ public class Poll : BaseEntity
 
      private Poll() { }
 
+     public Poll(string question, int eventId, bool allowMultipleChoices)
+     {
+          Question = question;
+          EventId = eventId;
+          AllowMultipleChoices = allowMultipleChoices;
+          IsActive = true;
+          CreatedAt = DateTime.UtcNow;
+     }
+
      public static Poll Create(string question, int eventId, DateTime? closesAt = null, bool allowMultipleChoices = false)
      {
           return new Poll
@@ -30,6 +39,14 @@ public class Poll : BaseEntity
                ClosesAt = closesAt,
                AllowMultipleChoices = allowMultipleChoices
           };
+     }
+     public virtual bool ValidateVote(List<int> selectedOptionIds)
+     {
+          if (!AllowMultipleChoices && selectedOptionIds.Count > 1)
+               return false;
+
+          return selectedOptionIds.Count > 0 &&
+                 selectedOptionIds.All(id => Options.Any(o => o.Id == id));
      }
 
      public void AddOption(string text)

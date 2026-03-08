@@ -53,6 +53,12 @@ if (app.Environment.IsDevelopment())
      });
 }
 
+var appConfig = AppConfiguration.Instance;
+appConfig.LoadFromConfiguration(builder.Configuration);
+appConfig.DisplaySettings();
+
+var maxEvents = AppConfiguration.Instance.GetSetting<int>("MaxEventsPerUser");
+
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();

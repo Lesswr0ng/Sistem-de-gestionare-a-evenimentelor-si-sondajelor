@@ -1,4 +1,6 @@
-﻿namespace EventsAndPolls.Application.DTOs.Responses;
+﻿using EventsAndPolls.Application.DTOs.Requests;
+
+namespace EventsAndPolls.Application.DTOs.Responses;
 
 public class PollDto
 {
