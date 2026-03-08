@@ -19,56 +19,59 @@
           </div>
 
           <div class="mb-3">
-               <label class="form-label">Options (at least one)</label>
-               <div id="optionsContainer">
-                    <div class="input-group mb-2">
-                         <input type="text" class="form-control" name="options" placeholder="Option 1" required>
-                         <button class="btn btn-outline-danger remove-option" type="button" style="display: none;">Remove</button>
-                    </div>
+               <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="allowMultiple">
+                    <label class="form-check-label" for="allowMultiple">
+                         Allow multiple choices (lasă debifat pentru o singură opțiune)
+                    </label>
                </div>
-               <button type="button" id="addOption" class="btn btn-sm btn-secondary">Add Option</button>
-          </div>
-
-          <div class="form-check mb-3">
-               <input class="form-check-input" type="checkbox" id="allowMultiple">
-               <label class="form-check-label" for="allowMultiple">
-                    Allow multiple choices
-               </label>
+               <small class="text-muted">
+                    ☑️ Bifat = Multiple Choice, 🔘 Nebifat = Single Choice
+               </small>
           </div>
 
           <div class="mb-3">
-               <label for="closesAt" class="form-label">Closing Date (optional)</label>
+               <label class="form-label">Options (cel puțin una)</label>
+               <div id="optionsContainer">
+                    <div class="input-group mb-2">
+                         <input type="text" class="form-control" name="options" placeholder="Opțiune 1" required>
+                         <button class="btn btn-outline-danger remove-option" type="button" style="display: none;">✖</button>
+                    </div>
+               </div>
+               <button type="button" id="addOption" class="btn btn-sm btn-secondary">+ Adaugă Opțiune</button>
+          </div>
+
+          <div class="mb-3">
+               <label for="closesAt" class="form-label">Data închiderii (opțional)</label>
                <input type="datetime-local" class="form-control" id="closesAt">
           </div>
 
-          <button type="submit" class="btn btn-primary">Create Poll</button>
-          <a href="/Events/Details?id=@eventId" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary">Creează Sondaj</button>
+          <a href="/Events/Details?id=@eventId" class="btn btn-secondary">Anulează</a>
      </form>
 </div>
 
 @section Scripts {
      <script>
-          // Get eventId from hidden input
           const eventId = document.getElementById('eventId').value;
-          console.log('📌 Event ID:', eventId);
-
           let optionCount = 1;
 
+          // Adăugare opțiune
           document.getElementById('addOption').addEventListener('click', function() {
               optionCount++;
               const container = document.getElementById('optionsContainer');
               const div = document.createElement('div');
               div.className = 'input-group mb-2';
               div.innerHTML = `
-                  <input type="text" class="form-control" name="options" placeholder="Option ${optionCount}" required>
-                  <button class="btn btn-outline-danger remove-option" type="button">Remove</button>
+                  <input type="text" class="form-control" name="options" placeholder="Opțiune ${optionCount}" required>
+                  <button class="btn btn-outline-danger remove-option" type="button">✖</button>
               `;
               container.appendChild(div);
 
-              // Show remove buttons if more than one option
               document.querySelectorAll('.remove-option').forEach(btn => btn.style.display = 'block');
           });
 
+          // Ștergere opțiune
           document.getElementById('optionsContainer').addEventListener('click', function(e) {
               if (e.target.classList.contains('remove-option')) {
                   e.target.closest('.input-group').remove();
@@ -79,28 +82,32 @@
               }
           });
 
+          // Submit form
           document.getElementById('createPollForm').addEventListener('submit', async function(e) {
               e.preventDefault();
 
+              // Colectează opțiunile
               const options = [];
               document.querySelectorAll('input[name="options"]').forEach(input => {
                   if (input.value.trim()) options.push(input.value.trim());
               });
 
               if (options.length === 0) {
-                  showMessage('danger', 'At least one option is required');
+                  showMessage('danger', 'Trebuie să adaugi cel puțin o opțiune');
                   return;
               }
 
               const pollData = {
-                  eventId: parseInt(document.getElementById('eventId').value),
+                  eventId: parseInt(eventId),
                   question: document.getElementById('question').value,
-                  options: options,
                   allowMultipleChoices: document.getElementById('allowMultiple').checked,
-                  closesAt: document.getElementById('closesAt').value ? new Date(document.getElementById('closesAt').value).toISOString() : null
+                  options: options,
+                  closesAt: document.getElementById('closesAt').value
+                      ? new Date(document.getElementById('closesAt').value).toISOString()
+                      : null
               };
 
-              console.log('📡 Sending poll data:', pollData);
+              console.log('Trimit sondaj:', pollData);
 
               try {
                   const response = await fetch('/api/polls', {
@@ -109,18 +116,14 @@
                       body: JSON.stringify(pollData)
                   });
 
-                  const responseData = await response.json();
-                  console.log('📡 Response:', response.status, responseData);
-
                   if (response.ok) {
-                      // Use the eventId variable we defined at the top
                       window.location.href = `/Events/Details/${eventId}`;
                   } else {
-                      showMessage('danger', responseData.error || responseData.title || 'Error creating poll');
+                      const error = await response.json();
+                      showMessage('danger', error.error || 'Eroare la crearea sondajului');
                   }
               } catch (error) {
-                  console.error('❌ Error:', error);
-                  showMessage('danger', 'Network error: ' + error.message);
+                  showMessage('danger', 'Eroare de rețea');
               }
           });
 
@@ -130,11 +133,9 @@
               msg.className = `alert alert-${type}`;
               msg.textContent = text;
 
-              // Auto-hide after 5 seconds
               setTimeout(() => {
                   msg.style.display = 'none';
-              }, 5000);
+              }, 3000);
           }
      </script>
-}
 }

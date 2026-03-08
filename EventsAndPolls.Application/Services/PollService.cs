@@ -18,15 +18,17 @@ public class PollService : IPollService
 
      public async Task<PollDto> CreatePollAsync(CreatePollDto createDto)
      {
-          // Use builder pattern
-          var pollBuilder = Poll.CreateBuilder(createDto.Question, createDto.EventId)
-              .WithOptions(createDto.Options)
-              .AllowMultipleSelections(createDto.AllowMultipleChoices);
+          PollCreator creator = createDto.AllowMultipleChoices
+              ? new MultipleChoicePollCreator()
+              : new SingleChoicePollCreator();
 
-          if (createDto.ClosesAt.HasValue)
-               pollBuilder.ClosesAt(createDto.ClosesAt.Value);
+          var poll = creator.CreateAndSetupPoll(
+              createDto.Question,
+              createDto.EventId,
+              createDto.Options) as Poll;
 
-          var poll = pollBuilder.Build();
+          if (poll == null)
+               throw new Exception("Failed to create poll");
 
           await _pollRepository.AddAsync(poll);
 
@@ -47,7 +49,6 @@ public class PollService : IPollService
 
      public async Task<VoteResultDto> CastVoteAsync(CastVoteDto voteDto, string userId)
      {
-          // Check if user already voted
           var hasVoted = await _voteRepository.HasUserVotedAsync(voteDto.PollId, userId);
           if (hasVoted)
                throw new InvalidOperationException("User has already voted in this poll");
@@ -59,11 +60,9 @@ public class PollService : IPollService
           if (!poll.IsActive)
                throw new InvalidOperationException("Poll is not active");
 
-          // Validate based on poll type
           if (!poll.AllowMultipleChoices && voteDto.SelectedOptionIds.Count > 1)
                throw new InvalidOperationException("This poll allows only single choice");
 
-          // Create votes
           foreach (var optionId in voteDto.SelectedOptionIds)
           {
                var vote = new Vote(userId, voteDto.PollId, optionId);
@@ -122,4 +121,5 @@ public class PollService : IPollService
                }).ToList() ?? new List<PollOptionDto>()
           };
      }
+
 }

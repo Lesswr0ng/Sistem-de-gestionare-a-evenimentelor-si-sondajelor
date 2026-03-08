@@ -15,18 +15,21 @@
      </div>
 
      <div id="pollDetails" style="display: none;">
-          <h1 id="pollQuestion"></h1>
+          <div class="d-flex justify-content-between align-items-center">
+               <h1 id="pollQuestion"></h1>
+               <span id="pollTypeBadge" class="badge bg-info fs-6"></span>
+          </div>
           <p class="text-muted" id="pollStatus"></p>
 
           <div class="row">
                <div class="col-md-6">
                     <div class="card">
                          <div class="card-header">
-                              <h5>Vote</h5>
+                              <h5>Votează</h5>
                          </div>
                          <div class="card-body">
                               <div id="voteOptions"></div>
-                              <button id="submitVote" class="btn btn-primary mt-3">Submit Vote</button>
+                              <button id="submitVote" class="btn btn-primary mt-3">Trimite Vot</button>
                          </div>
                     </div>
                </div>
@@ -34,7 +37,7 @@
                <div class="col-md-6">
                     <div class="card">
                          <div class="card-header">
-                              <h5>Results</h5>
+                              <h5>Rezultate</h5>
                          </div>
                          <div class="card-body">
                               <div id="results"></div>
@@ -45,49 +48,53 @@
      </div>
 
      <div class="mt-3">
-          <a href="javascript:history.back()" class="btn btn-secondary">Back</a>
+          <a href="javascript:history.back()" class="btn btn-secondary">Înapoi</a>
      </div>
 </div>
 
 @section Scripts {
      <script>
           const pollId = new URLSearchParams(window.location.search).get('id');
-          let pollData = null;
 
           async function loadPoll() {
               try {
                   const response = await fetch(`/api/polls/${pollId}`);
                   if (!response.ok) throw new Error('Poll not found');
-                  pollData = await response.json();
 
-                  document.getElementById('pollQuestion').textContent = pollData.question;
-                  document.getElementById('pollStatus').textContent = pollData.isActive ? 'Active' : 'Closed';
+                  const poll = await response.json();
 
-                  renderVoteOptions();
-                  renderResults();
+                  document.getElementById('pollQuestion').textContent = poll.question;
+                  document.getElementById('pollStatus').textContent = poll.isActive ? 'Activ' : 'Închis';
+
+                  // Afișează tipul sondajului
+                  const typeText = poll.allowMultipleChoices ? '✅ Multiple Choice' : '🔘 Single Choice';
+                  document.getElementById('pollTypeBadge').textContent = typeText;
+
+                  renderVoteOptions(poll);
+                  renderResults(poll);
 
                   document.getElementById('loadingSpinner').style.display = 'none';
                   document.getElementById('pollDetails').style.display = 'block';
               } catch (error) {
-                  showMessage('danger', 'Error loading poll');
-                  document.getElementById('loadingSpinner').innerHTML = '<p class="text-danger">Poll not found</p>';
+                  document.getElementById('loadingSpinner').innerHTML = '<p class="text-danger">Sondaj negăsit</p>';
               }
           }
 
-          function renderVoteOptions() {
+          function renderVoteOptions(poll) {
               const container = document.getElementById('voteOptions');
-              let html = '';
 
-              if (!pollData.isActive) {
-                  container.innerHTML = '<p class="text-muted">This poll is closed.</p>';
+              if (!poll.isActive) {
+                  container.innerHTML = '<p class="text-muted">Acest sondaj este închis.</p>';
                   document.getElementById('submitVote').disabled = true;
                   return;
               }
 
-              pollData.options.forEach(option => {
+              let html = '';
+              poll.options.forEach(option => {
+                  const inputType = poll.allowMultipleChoices ? 'checkbox' : 'radio';
                   html += `
                       <div class="form-check">
-                          <input class="form-check-input" type="${pollData.allowMultipleChoices ? 'checkbox' : 'radio'}"
+                          <input class="form-check-input" type="${inputType}"
                                  name="voteOption" value="${option.id}" id="opt${option.id}">
                           <label class="form-check-label" for="opt${option.id}">
                               ${option.text}
@@ -98,20 +105,21 @@
               container.innerHTML = html;
           }
 
-          function renderResults() {
+          function renderResults(poll) {
               const container = document.getElementById('results');
-              if (!pollData.options || pollData.options.length === 0) {
-                  container.innerHTML = '<p>No results yet.</p>';
+              if (!poll.options || poll.options.length === 0) {
+                  container.innerHTML = '<p>Nu există rezultate încă.</p>';
                   return;
               }
 
               let html = '<ul class="list-group">';
-              pollData.options.forEach(option => {
-                  const percentage = option.percentage || 0;
+              poll.options.forEach(option => {
                   html += `
                       <li class="list-group-item d-flex justify-content-between align-items-center">
                           ${option.text}
-                          <span class="badge bg-primary rounded-pill">${option.voteCount} votes (${percentage}%)</span>
+                          <span class="badge bg-primary rounded-pill">
+                              ${option.voteCount} voturi (${option.percentage || 0}%)
+                          </span>
                       </li>
                   `;
               });
@@ -126,17 +134,12 @@
               });
 
               if (selected.length === 0) {
-                  showMessage('warning', 'Please select at least one option.');
-                  return;
-              }
-
-              if (!pollData.allowMultipleChoices && selected.length > 1) {
-                  showMessage('warning', 'This poll allows only one choice.');
+                  alert('Selectează cel puțin o opțiune.');
                   return;
               }
 
               const voteData = {
-                  pollId: pollId,
+                  pollId: parseInt(pollId),
                   selectedOptionIds: selected
               };
 
@@ -148,25 +151,16 @@
                   });
 
                   if (response.ok) {
-                      showMessage('success', 'Vote recorded!');
-                      // Refresh results
-                      setTimeout(() => loadPoll(), 1000);
+                      alert('Vot înregistrat!');
+                      loadPoll(); // Reîncarcă pentru a vedea rezultatele
                   } else {
                       const error = await response.json();
-                      showMessage('danger', error.error || 'Error voting');
+                      alert(error.error || 'Eroare la vot');
                   }
               } catch (error) {
-                  showMessage('danger', 'Network error');
+                  alert('Eroare de rețea');
               }
           });
-
-          function showMessage(type, text) {
-              const msg = document.getElementById('message');
-              msg.style.display = 'block';
-              msg.className = `alert alert-${type}`;
-              msg.textContent = text;
-              setTimeout(() => { msg.style.display = 'none'; }, 5000);
-          }
 
           loadPoll();
      </script>

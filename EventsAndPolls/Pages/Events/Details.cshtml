@@ -111,44 +111,33 @@
               }
           }
 
-          async function loadPolls() {
-              try {
-                  console.log('📡 Fetching polls for event:', eventId);
-                  const response = await fetch(`/api/events/${eventId}/polls`);
+          function loadPolls() {
+              fetch(`/api/events/${eventId}/polls`)
+                  .then(response => response.json())
+                  .then(polls => {
+                      const container = document.getElementById('pollsList');
+                      if (polls.length === 0) {
+                          container.innerHTML = '<p class="text-muted">Nu există sondaje.</p>';
+                          return;
+                      }
 
-                  if (!response.ok) {
-                      throw new Error(`Failed to load polls (${response.status})`);
-                  }
-
-                  const polls = await response.json();
-                  console.log('📦 Polls data:', polls);
-
-                  const container = document.getElementById('pollsList');
-
-                  if (!polls || polls.length === 0) {
-                      container.innerHTML = '<p class="text-muted">No polls yet for this event.</p>';
-                      return;
-                  }
-
-                  let html = '';
-                  polls.forEach(poll => {
-                      html += `
-                          <div class="card mb-2">
-                              <div class="card-body">
-                                  <h6>${poll.question}</h6>
-                                  <small class="text-muted">Total votes: ${poll.totalVotes || 0}</small>
-                                  <a href="/Polls/Details?id=${poll.id}" class="btn btn-sm btn-outline-primary float-end">View Poll</a>
+                      let html = '';
+                      polls.forEach(poll => {
+                          const icon = poll.allowMultipleChoices ? '☑️' : '🔘';
+                          html += `
+                              <div class="card mb-2">
+                                  <div class="card-body">
+                                      <div class="d-flex justify-content-between">
+                                          <h6>${icon} ${poll.question}</h6>
+                                          <span class="badge bg-secondary">${poll.totalVotes} voturi</span>
+                                      </div>
+                                      <a href="/Polls/Details?id=${poll.id}" class="btn btn-sm btn-outline-primary mt-2">Vezi sondaj</a>
+                                  </div>
                               </div>
-                          </div>
-                      `;
+                          `;
+                      });
+                      container.innerHTML = html;
                   });
-
-                  container.innerHTML = html;
-
-              } catch (error) {
-                  console.error('❌ Error loading polls:', error);
-                  document.getElementById('pollsList').innerHTML = '<p class="text-danger">Error loading polls</p>';
-              }
           }
 
           // Start loading

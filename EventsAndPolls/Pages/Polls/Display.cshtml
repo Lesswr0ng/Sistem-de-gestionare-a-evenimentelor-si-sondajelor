@@ -1,0 +1,47 @@
+﻿@page
+@{
+     ViewData["Title"] = "Poll Display Test";
+     var platform = Request.Query["platform"];
+}
+
+<div class="container mt-4">
+     <h1>Abstract Factory Pattern Demo</h1>
+     <p>Current platform: <strong>@(string.IsNullOrEmpty(platform) ? "web" : platform)</strong></p>
+
+     <div class="mb-3">
+          <a href="?platform=web" class="btn btn-primary">Web View</a>
+          <a href="?platform=mobile" class="btn btn-success">Mobile View</a>
+          <a href="?platform=admin" class="btn btn-warning">Admin View</a>
+     </div>
+
+     <div id="pollContainer">
+          <div class="spinner-border text-primary" role="status">
+               <span class="visually-hidden">Loading...</span>
+          </div>
+     </div>
+</div>
+
+@section Scripts {
+     <script>
+          const platform = new URLSearchParams(window.location.search).get('platform') || 'web';
+          const pollId = 1; // You'd get this from query string
+
+          async function loadPoll() {
+              try {
+                  const response = await fetch(`/api/polls/${pollId}`);
+                  const poll = await response.json();
+
+                  // Get the appropriate factory from server
+                  const factoryResponse = await fetch(`/api/ui-factory/render?platform=${platform}&pollId=${pollId}`);
+                  const html = await factoryResponse.text();
+
+                  document.getElementById('pollContainer').innerHTML = html;
+
+              } catch (error) {
+                  console.error('Error:', error);
+              }
+          }
+
+          loadPoll();
+     </script>
+}

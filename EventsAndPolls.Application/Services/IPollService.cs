@@ -1,5 +1,6 @@
 ﻿using EventsAndPolls.Application.DTOs.Requests;
 using EventsAndPolls.Application.DTOs.Responses;
+using EventsAndPolls.Domain.Entities;
 
 namespace EventsAndPolls.Application.Services;
 

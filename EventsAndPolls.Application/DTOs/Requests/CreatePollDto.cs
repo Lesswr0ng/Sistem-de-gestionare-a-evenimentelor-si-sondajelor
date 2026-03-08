@@ -1,7 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
 namespace EventsAndPolls.Application.DTOs.Requests;
-
 public class CreatePollDto
 {
      [Required]
