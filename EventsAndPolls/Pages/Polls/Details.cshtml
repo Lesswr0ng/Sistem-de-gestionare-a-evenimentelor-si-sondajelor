@@ -50,6 +50,100 @@
      <div class="mt-3">
           <a href="javascript:history.back()" class="btn btn-secondary">Înapoi</a>
      </div>
+
+     <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#cloneModal">
+          📋 Clonează Sondaj
+     </button>
+
+     <div class="modal fade" id="cloneModal" tabindex="-1">
+          <div class="modal-dialog">
+               <div class="modal-content">
+                    <div class="modal-header">
+                         <h5 class="modal-title">Clonează Sondaj</h5>
+                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                         <form id="cloneForm">
+                              <input type="hidden" id="sourcePollId" value="@pollId">
+
+                              <div class="mb-3">
+                                   <label for="targetEventId" class="form-label">Eveniment țintă (opțional)</label>
+                                   <select class="form-select" id="targetEventId">
+                                        <option value="">Același eveniment</option>
+                                   </select>
+                              </div>
+
+                              <div class="mb-3">
+                                   <label for="newQuestion" class="form-label">Întrebare nouă (opțional)</label>
+                                   <input type="text" class="form-control" id="newQuestion"
+                                          placeholder="Lasă gol pentru aceeași întrebare">
+                              </div>
+
+                              <div class="form-check mb-3">
+                                   <input class="form-check-input" type="checkbox" id="deepClone" checked>
+                                   <label class="form-check-label" for="deepClone">
+                                        Clonează și opțiunile (Deep Clone)
+                                   </label>
+                              </div>
+                         </form>
+                    </div>
+                    <div class="modal-footer">
+                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anulează</button>
+                         <button type="button" class="btn btn-primary" id="confirmClone">Clonează</button>
+                    </div>
+               </div>
+          </div>
+     </div>
+
+     <script>
+          async function loadEventsForClone() {
+              try {
+                  const response = await fetch('/api/events');
+                  const events = await response.json();
+
+                  const select = document.getElementById('targetEventId');
+                  events.forEach(event => {
+                      const option = document.createElement('option');
+                      option.value = event.id;
+                      option.textContent = `${event.title} (${new Date(event.startDate).toLocaleDateString()})`;
+                      select.appendChild(option);
+                  });
+              } catch (error) {
+                  console.error('Eroare la încărcarea evenimentelor:', error);
+              }
+          }
+
+          // Clonează sondajul
+          document.getElementById('confirmClone').addEventListener('click', async function() {
+              const cloneData = {
+                  sourcePollId: parseInt(document.getElementById('sourcePollId').value),
+                  targetEventId: document.getElementById('targetEventId').value || null,
+                  newQuestion: document.getElementById('newQuestion').value || null,
+                  deepClone: document.getElementById('deepClone').checked
+              };
+
+              try {
+                  const response = await fetch('/api/polls/clone', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(cloneData)
+                  });
+
+                  if (response.ok) {
+                      const newPoll = await response.json();
+                      alert(`Sondaj clonat cu succes! ID nou: ${newPoll.id}`);
+                      window.location.href = `/Polls/Details?id=${newPoll.id}`;
+                  } else {
+                      const error = await response.json();
+                      alert('Eroare: ' + error.error);
+                  }
+              } catch (error) {
+                  alert('Eroare de rețea');
+              }
+          });
+
+          loadEventsForClone();
+     </script>
 </div>
 
 @section Scripts {
@@ -66,7 +160,6 @@
                   document.getElementById('pollQuestion').textContent = poll.question;
                   document.getElementById('pollStatus').textContent = poll.isActive ? 'Activ' : 'Închis';
 
-                  // Afișează tipul sondajului
                   const typeText = poll.allowMultipleChoices ? '✅ Multiple Choice' : '🔘 Single Choice';
                   document.getElementById('pollTypeBadge').textContent = typeText;
 
@@ -152,7 +245,7 @@
 
                   if (response.ok) {
                       alert('Vot înregistrat!');
-                      loadPoll(); // Reîncarcă pentru a vedea rezultatele
+                      loadPoll();
                   } else {
                       const error = await response.json();
                       alert(error.error || 'Eroare la vot');

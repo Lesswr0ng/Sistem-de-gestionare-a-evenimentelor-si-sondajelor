@@ -29,6 +29,41 @@ public class Poll : BaseEntity
           IsActive = true;
           CreatedAt = DateTime.UtcNow;
      }
+     // Shallow Clone - copiază doar proprietățile de bază, fără relații
+     public Poll Clone()
+     {
+          return new Poll
+          {
+               Question = this.Question,
+               EventId = this.EventId, // Poate fi schimbat pentru alt eveniment
+               AllowMultipleChoices = this.AllowMultipleChoices,
+               ClosesAt = this.ClosesAt,
+               IsActive = true, // Sondajul nou e activ
+               CreatedAt = DateTime.UtcNow
+          };
+     }
+
+     // Deep Clone - copiază tot, inclusiv opțiunile
+     public Poll DeepClone()
+     {
+          var clonedPoll = new Poll
+          {
+               Question = this.Question,
+               EventId = this.EventId,
+               AllowMultipleChoices = this.AllowMultipleChoices,
+               ClosesAt = this.ClosesAt,
+               IsActive = true,
+               CreatedAt = DateTime.UtcNow
+          };
+
+          // Copiază și opțiunile
+          foreach (var option in this.Options)
+          {
+               clonedPoll.AddOption(option.Text);
+          }
+
+          return clonedPoll;
+     }
 
      public static Poll Create(string question, int eventId, DateTime? closesAt = null, bool allowMultipleChoices = false)
      {
@@ -53,8 +88,15 @@ public class Poll : BaseEntity
      {
           Options.Add(new PollOption(text, Id));
      }
+     public void SetEventId(int newEventId)
+     {
+          EventId = newEventId;
+     }
 
-     public void Close() => IsActive = false;
+     public void SetQuestion(string newQuestion)
+     {
+          Question = newQuestion;
+     }
 }
 
 public class PollBuilder

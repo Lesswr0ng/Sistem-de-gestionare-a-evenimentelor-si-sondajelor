@@ -7,7 +7,6 @@ namespace EventsAndPolls.Application.Services;
 // Singleton Pattern
 public sealed class AppConfiguration
 {
-     // Static instance - the one and only instance
      private static AppConfiguration? _instance;
      private static readonly object _lock = new object();
 
@@ -18,7 +17,6 @@ public sealed class AppConfiguration
      {
           _settings = new Dictionary<string, object>();
 
-          // Load default settings
           _settings["MaxEventsPerUser"] = 10;
           _settings["MaxPollsPerEvent"] = 20;
           _settings["DefaultPollDurationDays"] = 7;
@@ -26,7 +24,6 @@ public sealed class AppConfiguration
           _settings["VoteCooldownMinutes"] = 0;
      }
 
-     // Public access point to get the instance
      public static AppConfiguration Instance
      {
           get
@@ -42,7 +39,6 @@ public sealed class AppConfiguration
           }
      }
 
-     // Methods to access settings
      public T GetSetting<T>(string key, T defaultValue = default)
      {
           if (_settings.ContainsKey(key) && _settings[key] is T value)

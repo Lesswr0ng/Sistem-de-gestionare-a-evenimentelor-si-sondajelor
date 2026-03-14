@@ -9,15 +9,19 @@ public class PollService : IPollService
 {
      private readonly IPollRepository _pollRepository;
      private readonly IVoteRepository _voteRepository;
+     private readonly IEventRepository _eventRepository;
 
-     public PollService(IPollRepository pollRepository, IVoteRepository voteRepository)
+     public PollService(IPollRepository pollRepository, IVoteRepository voteRepository, IEventRepository eventRepository)
      {
           _pollRepository = pollRepository;
           _voteRepository = voteRepository;
+          _eventRepository = eventRepository;
      }
 
      public async Task<PollDto> CreatePollAsync(CreatePollDto createDto)
      {
+          //factory method implementation
+          /*
           PollCreator creator = createDto.AllowMultipleChoices
               ? new MultipleChoicePollCreator()
               : new SingleChoicePollCreator();
@@ -32,6 +36,14 @@ public class PollService : IPollService
 
           await _pollRepository.AddAsync(poll);
 
+          return MapToDto(poll);*/
+          
+          var poll = Poll.CreateBuilder(createDto.Question, createDto.EventId)
+              .WithOptions(createDto.Options)
+              .AllowMultipleSelections(createDto.AllowMultipleChoices)
+              .Build();
+
+          await _pollRepository.AddAsync(poll);
           return MapToDto(poll);
      }
 
@@ -121,5 +133,31 @@ public class PollService : IPollService
                }).ToList() ?? new List<PollOptionDto>()
           };
      }
+     public async Task<PollDto> ClonePollAsync(ClonePollDto cloneDto)
+     {
+          var sourcePoll = await _pollRepository.GetByIdAsync(cloneDto.SourcePollId);
+          if (sourcePoll == null)
+               throw new Exception("Sondaj sursă negăsit");
 
+          Poll clonedPoll = cloneDto.DeepClone
+              ? sourcePoll.DeepClone()
+              : sourcePoll.Clone();
+
+          if (cloneDto.TargetEventId.HasValue)
+          {
+               var targetEvent = await _eventRepository.GetByIdAsync(cloneDto.TargetEventId.Value);
+               if (targetEvent == null)
+                    throw new Exception("Eveniment țintă negăsit");
+
+               clonedPoll.SetEventId(cloneDto.TargetEventId.Value);
+          }
+
+          if (!string.IsNullOrWhiteSpace(cloneDto.NewQuestion))
+          {
+               clonedPoll.SetQuestion(cloneDto.NewQuestion);
+          }
+
+          await _pollRepository.AddAsync(clonedPoll);
+          return MapToDto(clonedPoll);
+     }
 }

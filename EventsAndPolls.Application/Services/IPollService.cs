@@ -12,4 +12,5 @@ public interface IPollService
      Task<VoteResultDto> CastVoteAsync(CastVoteDto voteDto, string userId);
      Task<PollDto> GetPollResultsAsync(int pollId);
      Task DeletePollAsync(int id);
+     Task<PollDto> ClonePollAsync(ClonePollDto cloneDto);
 }

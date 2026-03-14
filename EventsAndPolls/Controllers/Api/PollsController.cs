@@ -119,4 +119,18 @@ public class PollsController : ControllerBase
                return StatusCode(500, new { error = "An error occurred" });
           }
      }
+
+     [HttpPost("clone")]
+     public async Task<ActionResult<PollDto>> ClonePoll([FromBody] ClonePollDto cloneDto)
+     {
+          try
+          {
+               var result = await _pollService.ClonePollAsync(cloneDto);
+               return CreatedAtAction(nameof(GetPoll), new { id = result.Id }, result);
+          }
+          catch (Exception ex)
+          {
+               return BadRequest(new { error = ex.Message });
+          }
+     }
 }
