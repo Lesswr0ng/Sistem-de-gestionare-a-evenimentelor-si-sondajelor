@@ -14,10 +14,22 @@
      </div>
 
      <div id="eventDetails" style="display: none;">
-          <h1 id="eventTitle"></h1>
+          <div class="d-flex justify-content-between align-items-start mb-1">
+               <h1 id="eventTitle"></h1>
+          </div>
           <p id="eventDescription" class="lead"></p>
 
-          <div class="row mt-4">
+          <div class="d-flex align-items-center gap-2 mb-4">
+               <span class="text-muted small">Export event:</span>
+               <a id="exportJson" href="#" class="btn btn-sm btn-outline-secondary">
+                    ⬇ JSON
+               </a>
+               <a id="exportTxt" href="#" class="btn btn-sm btn-outline-secondary">
+                    ⬇ Text Report
+               </a>
+          </div>
+
+          <div class="row mt-2">
                <div class="col-md-8">
                     <div class="card mb-4">
                          <div class="card-header">
@@ -27,7 +39,8 @@
                               <div id="pollsList">
                                    <p class="text-muted">Loading polls...</p>
                               </div>
-                              <a href="/Polls/Create?eventId=@(ViewContext.RouteData.Values["id"])" class="btn btn-success mt-3">Create New Poll</a>
+                              <a href="/Polls/Create?eventId=@(ViewContext.RouteData.Values["id"])"
+                                 class="btn btn-success mt-3">Create New Poll</a>
                          </div>
                     </div>
                </div>
@@ -60,47 +73,32 @@
      <script>
           console.log('🔵 Details page loaded');
 
-          // Get event ID from URL path (e.g., /Events/Details/2)
           const pathParts = window.location.pathname.split('/');
           const eventId = pathParts[pathParts.length - 1];
 
-          console.log('📌 Event ID:', eventId);
-
-          // Set the create poll link
-          const createPollLink = document.getElementById('createPollLink');
-          if (createPollLink) {
-              createPollLink.href = `/Polls/Create?eventId=${eventId}`;
-              console.log('📌 Create poll link set to:', createPollLink.href);
-          }
+          // ── Adapter: wire up export links once we have the eventId ─────────
+          document.getElementById('exportJson').href = `/api/export/event/${eventId}?format=json`;
+          document.getElementById('exportTxt').href  = `/api/export/event/${eventId}?format=txt`;
 
           async function loadEventDetails() {
               try {
-                  console.log('📡 Fetching event:', eventId);
                   const response = await fetch(`/api/events/${eventId}`);
-
-                  if (!response.ok) {
-                      throw new Error(`Event not found (${response.status})`);
-                  }
+                  if (!response.ok) throw new Error(`Event not found (${response.status})`);
 
                   const event = await response.json();
-                  console.log('📦 Event data:', event);
 
-                  // Update page with event data
-                  document.getElementById('eventTitle').textContent = event.title;
-                  document.getElementById('eventDescription').textContent = event.description;
-                  document.getElementById('startDate').textContent = new Date(event.startDate).toLocaleString();
-                  document.getElementById('endDate').textContent = new Date(event.endDate).toLocaleString();
-                  document.getElementById('location').textContent = event.location;
-                  document.getElementById('maxParticipants').textContent = event.maxParticipants;
-                  document.getElementById('createdAt').textContent = new Date(event.createdAt).toLocaleDateString();
+                  document.getElementById('eventTitle').textContent        = event.title;
+                  document.getElementById('eventDescription').textContent  = event.description;
+                  document.getElementById('startDate').textContent         = new Date(event.startDate).toLocaleString();
+                  document.getElementById('endDate').textContent           = new Date(event.endDate).toLocaleString();
+                  document.getElementById('location').textContent          = event.location;
+                  document.getElementById('maxParticipants').textContent   = event.maxParticipants;
+                  document.getElementById('createdAt').textContent         = new Date(event.createdAt).toLocaleDateString();
 
-                  // Hide spinner, show details
                   document.getElementById('loadingSpinner').style.display = 'none';
-                  document.getElementById('eventDetails').style.display = 'block';
+                  document.getElementById('eventDetails').style.display   = 'block';
 
-                  // Load polls
                   loadPolls();
-
               } catch (error) {
                   console.error('❌ Error:', error);
                   document.getElementById('loadingSpinner').innerHTML = `
@@ -131,7 +129,14 @@
                                           <h6>${icon} ${poll.question}</h6>
                                           <span class="badge bg-secondary">${poll.totalVotes} voturi</span>
                                       </div>
-                                      <a href="/Polls/Details?id=${poll.id}" class="btn btn-sm btn-outline-primary mt-2">Vezi sondaj</a>
+                                      <div class="d-flex gap-2 mt-2">
+                                          <a href="/Polls/Details?id=${poll.id}"
+                                             class="btn btn-sm btn-outline-primary">Vezi sondaj</a>
+                                          <a href="/api/export/poll/${poll.id}?format=json"
+                                             class="btn btn-sm btn-outline-secondary">⬇ JSON</a>
+                                          <a href="/api/export/poll/${poll.id}?format=txt"
+                                             class="btn btn-sm btn-outline-secondary">⬇ Text</a>
+                                      </div>
                                   </div>
                               </div>
                           `;
@@ -140,7 +145,6 @@
                   });
           }
 
-          // Start loading
           loadEventDetails();
      </script>
 }

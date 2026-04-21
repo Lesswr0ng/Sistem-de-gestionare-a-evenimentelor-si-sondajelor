@@ -16,7 +16,7 @@ public class Poll : BaseEntity
 
      // Navigation properties
      public virtual Event Event { get; private set; } = null!;
-     public virtual ICollection<PollOption> Options { get; private set; } = new List<PollOption>();
+     public ICollection<PollOption> Options { get; set; } = new List<PollOption>();
      public virtual ICollection<Vote> Votes { get; private set; } = new List<Vote>();
 
      private Poll() { }
@@ -97,6 +97,23 @@ public class Poll : BaseEntity
      {
           Question = newQuestion;
      }
+     public virtual ICollection<PollOptionGroup> OptionGroups { get; private set; } = new List<PollOptionGroup>();
+
+     // Also add a method to create a grouped option:
+     public PollOptionGroup AddOptionGroup(string groupName)
+     {
+          var group = new PollOptionGroup(groupName, Id);
+          OptionGroups.Add(group);
+          return group;
+     }
+
+     public void AddGroupedOption(string text, PollOptionGroup group)
+     {
+          var option = new PollOption(text, Id, group.Id);
+          Options.Add(option);
+          group.Options.Add(option);  // Adaugă și în grup
+     }
+
 }
 
 public class PollBuilder

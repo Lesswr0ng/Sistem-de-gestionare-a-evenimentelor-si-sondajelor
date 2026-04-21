@@ -1,6 +1,9 @@
 ﻿using EventsAndPolls.Application.DTOs.Requests;
 using EventsAndPolls.Application.DTOs.Responses;
 using EventsAndPolls.Application.Services;
+using EventsAndPolls.Domain.Composite;
+using EventsAndPolls.Domain.Interfaces;
+using EventsAndPolls.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventsAndPolls.Controllers.Api;
@@ -11,11 +14,13 @@ public class PollsController : ControllerBase
 {
      private readonly IPollService _pollService;
      private readonly ILogger<PollsController> _logger;
+     private readonly IPollRepository _pollRepository;
 
-     public PollsController(IPollService pollService, ILogger<PollsController> logger)
+     public PollsController(IPollService pollService, ILogger<PollsController> logger, IPollRepository pollRepository)
      {
           _pollService = pollService;
           _logger = logger;
+          _pollRepository = pollRepository;
      }
 
      [HttpGet("{id}")]
@@ -132,5 +137,49 @@ public class PollsController : ControllerBase
           {
                return BadRequest(new { error = ex.Message });
           }
+     }
+     [HttpGet("{id}/tree")]
+     public async Task<IActionResult> GetPollTree(int id)
+     {
+          try
+          {
+               var poll = await _pollRepository.GetByIdAsync(id);
+               if (poll == null)
+                    return NotFound(new { error = $"Poll with ID {id} not found" });
+
+               var tree = PollTreeBuilder.BuildTree(poll);
+
+               // Return a structured JSON representation of the composite tree
+               var result = BuildTreeJson(tree);
+               return Ok(result);
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error building tree for poll {PollId}", id);
+               return StatusCode(500, new { error = "An error occurred" });
+          }
+     }
+
+     // Recursively serialize the composite tree to an anonymous object
+     private object BuildTreeJson(IPollComponent node)
+     {
+          if (node is PollOptionGroup group)
+          {
+               return new
+               {
+                    type = "group",
+                    id = group.Id,
+                    text = group.DisplayText,
+                    children = group.Children.Select(BuildTreeJson).ToList()
+               };
+          }
+
+          // Leaf node
+          return new
+          {
+               type = "option",
+               id = node.Id,
+               text = node.DisplayText
+          };
      }
 }

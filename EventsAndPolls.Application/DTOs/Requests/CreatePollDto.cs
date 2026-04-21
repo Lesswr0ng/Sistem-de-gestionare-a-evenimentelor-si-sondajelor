@@ -12,9 +12,17 @@ public class CreatePollDto
 
      [Required(ErrorMessage = "At least one option is required")]
      [MinLength(1, ErrorMessage = "At least one option is required")]
+
      public List<string> Options { get; set; } = new();
+     public List<GroupDto> Groups { get; set; } = new();
 
      public bool AllowMultipleChoices { get; set; }
 
      public DateTime? ClosesAt { get; set; }
+}
+
+public class GroupDto
+{
+     public string GroupName { get; set; } = string.Empty;
+     public List<string> Options { get; set; } = new();
 }

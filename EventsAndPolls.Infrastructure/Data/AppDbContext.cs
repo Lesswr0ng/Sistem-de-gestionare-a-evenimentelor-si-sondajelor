@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
      public DbSet<Poll> Polls { get; set; }
      public DbSet<PollOption> PollOptions { get; set; }
      public DbSet<Vote> Votes { get; set; }
+     public DbSet<PollOptionGroup> PollOptionGroups { get; set; }
 
      protected override void OnModelCreating(ModelBuilder modelBuilder)
      {
@@ -47,6 +48,12 @@ public class AppDbContext : DbContext
                      .WithMany(p => p.Options)
                      .HasForeignKey(po => po.PollId)
                      .OnDelete(DeleteBehavior.Cascade);
+
+               entity.HasOne(po => po.Group)
+                     .WithMany(g => g.Options)
+                     .HasForeignKey(po => po.GroupId)
+                     .IsRequired(false)
+                     .OnDelete(DeleteBehavior.NoAction);
           });
 
           // Vote configuration - FIX HERE
@@ -64,5 +71,17 @@ public class AppDbContext : DbContext
                      .HasForeignKey(v => v.PollOptionId)
                      .OnDelete(DeleteBehavior.NoAction);  // Changed from Cascade to NoAction
           });
+
+          modelBuilder.Entity<PollOptionGroup>(entity =>
+          {
+               entity.HasKey(g => g.Id);
+               entity.Property(g => g.Name).IsRequired().HasMaxLength(200);
+
+               entity.HasOne(g => g.Poll)
+                     .WithMany(p => p.OptionGroups)
+                     .HasForeignKey(g => g.PollId)
+                     .OnDelete(DeleteBehavior.Cascade);
+          });
+
      }
 }

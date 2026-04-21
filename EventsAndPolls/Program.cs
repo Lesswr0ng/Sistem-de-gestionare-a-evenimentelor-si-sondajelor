@@ -5,6 +5,8 @@ using EventsAndPolls.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.Models;
+using EventsAndPolls.Application.Export;
+using EventsAndPolls.Application.Facade;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +34,12 @@ builder.Services.AddScoped<IVoteRepository, VoteRepository>();
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IPollService, PollService>();
 builder.Services.AddScoped<IVoteService, VoteService>();
+builder.Services.AddScoped<IPollFacade, PollFacade>();
+
+builder.Services.AddScoped<IExportAdapter, JsonExportAdapter>();
+builder.Services.AddScoped<IExportAdapter, PlainTextExportAdapter>();
+builder.Services.AddScoped<IExportService, ExportService>();
+
 
 var app = builder.Build();
 
