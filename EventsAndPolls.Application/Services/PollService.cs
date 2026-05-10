@@ -61,20 +61,6 @@ public class PollService : IPollService
 
      public async Task<VoteResultDto> CastVoteAsync(CastVoteDto voteDto, string userId)
      {
-          var hasVoted = await _voteRepository.HasUserVotedAsync(voteDto.PollId, userId);
-          if (hasVoted)
-               throw new InvalidOperationException("User has already voted in this poll");
-
-          var poll = await _pollRepository.GetByIdAsync(voteDto.PollId);
-          if (poll == null)
-               throw new ArgumentException($"Poll with ID {voteDto.PollId} not found");
-
-          if (!poll.IsActive)
-               throw new InvalidOperationException("Poll is not active");
-
-          if (!poll.AllowMultipleChoices && voteDto.SelectedOptionIds.Count > 1)
-               throw new InvalidOperationException("This poll allows only single choice");
-
           foreach (var optionId in voteDto.SelectedOptionIds)
           {
                var vote = new Vote(userId, voteDto.PollId, optionId);
