@@ -1,13 +1,13 @@
 ﻿@page
 @{
      Layout = "_Layout";
-     ViewData["Title"] = "Poll Details";
+     ViewData["Title"] = "Detalii Sondaj";
      var pollId = Request.Query["id"];
+     bool isOrganizer = User.IsInRole("Organizer");
+     bool isAuthenticated = User.Identity?.IsAuthenticated == true;
 }
 
 <div class="container mt-4">
-     <div id="message" class="alert" style="display: none;"></div>
-
      <div id="loadingSpinner" class="text-center">
           <div class="spinner-border text-primary" role="status">
                <span class="visually-hidden">Loading...</span>
@@ -21,15 +21,15 @@
           </div>
           <p class="text-muted" id="pollStatus"></p>
 
-          <div class="d-flex align-items-center gap-2 mb-4">
-               <span class="text-muted small">Export:</span>
-               <a id="exportJson" href="#" class="btn btn-sm btn-outline-secondary">
-                    ⬇ JSON
-               </a>
-               <a id="exportTxt" href="#" class="btn btn-sm btn-outline-secondary">
-                    ⬇ Text Report
-               </a>
-          </div>
+          @* Export — only organizers *@
+          @if (isOrganizer)
+          {
+               <div class="d-flex align-items-center gap-2 mb-4">
+                    <span class="text-muted small">Export:</span>
+                    <a id="exportJson" href="#" class="btn btn-sm btn-outline-secondary">⬇ JSON</a>
+                    <a id="exportTxt" href="#" class="btn btn-sm btn-outline-secondary">⬇ Text Report</a>
+               </div>
+          }
 
           <div class="row">
                <div class="col-md-6">
@@ -39,7 +39,18 @@
                          </div>
                          <div class="card-body">
                               <div id="voteOptions"></div>
-                              <button id="submitVote" class="btn btn-primary mt-3">Trimite Vot</button>
+
+                              @* Vote button — only authenticated users *@
+                              @if (isAuthenticated)
+                              {
+                                   <button id="submitVote" class="btn btn-primary mt-3">Trimite Vot</button>
+                              }
+                              else
+                              {
+                                   <p class="text-muted mt-3">
+                                        <a asp-page="/Account/Login">Autentifică-te</a> pentru a vota.
+                                   </p>
+                              }
                          </div>
                     </div>
                </div>
@@ -55,16 +66,27 @@
                     </div>
                </div>
           </div>
+
+          @* Clone button — only organizers *@
+          @if (isOrganizer)
+          {
+               <div class="mt-3">
+                    <button type="button" class="btn btn-outline-info"
+                            data-bs-toggle="modal" data-bs-target="#cloneModal">
+                         📋 Clonează Sondaj
+                    </button>
+               </div>
+          }
      </div>
 
-     <div class="mt-3 d-flex gap-2">
+     <div class="mt-3">
           <a href="javascript:history.back()" class="btn btn-secondary">Înapoi</a>
-
-          <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#cloneModal">
-               📋 Clonează Sondaj
-          </button>
      </div>
+</div>
 
+@* Clone modal — only rendered for organizers *@
+@if (isOrganizer)
+{
      <div class="modal fade" id="cloneModal" tabindex="-1">
           <div class="modal-dialog">
                <div class="modal-content">
@@ -73,29 +95,24 @@
                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body">
-                         <form id="cloneForm">
-                              <input type="hidden" id="sourcePollId" value="@pollId">
-
-                              <div class="mb-3">
-                                   <label for="targetEventId" class="form-label">Eveniment țintă (opțional)</label>
-                                   <select class="form-select" id="targetEventId">
-                                        <option value="">Același eveniment</option>
-                                   </select>
-                              </div>
-
-                              <div class="mb-3">
-                                   <label for="newQuestion" class="form-label">Întrebare nouă (opțional)</label>
-                                   <input type="text" class="form-control" id="newQuestion"
-                                          placeholder="Lasă gol pentru aceeași întrebare">
-                              </div>
-
-                              <div class="form-check mb-3">
-                                   <input class="form-check-input" type="checkbox" id="deepClone" checked>
-                                   <label class="form-check-label" for="deepClone">
-                                        Clonează și opțiunile (Deep Clone)
-                                   </label>
-                              </div>
-                         </form>
+                         <input type="hidden" id="sourcePollId" value="@pollId">
+                         <div class="mb-3">
+                              <label for="targetEventId" class="form-label">Eveniment țintă (opțional)</label>
+                              <select class="form-select" id="targetEventId">
+                                   <option value="">Același eveniment</option>
+                              </select>
+                         </div>
+                         <div class="mb-3">
+                              <label for="newQuestion" class="form-label">Întrebare nouă (opțional)</label>
+                              <input type="text" class="form-control" id="newQuestion"
+                                     placeholder="Lasă gol pentru aceeași întrebare">
+                         </div>
+                         <div class="form-check mb-3">
+                              <input class="form-check-input" type="checkbox" id="deepClone" checked>
+                              <label class="form-check-label" for="deepClone">
+                                   Clonează și opțiunile (Deep Clone)
+                              </label>
+                         </div>
                     </div>
                     <div class="modal-footer">
                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Anulează</button>
@@ -104,92 +121,42 @@
                </div>
           </div>
      </div>
-
-     <script>
-          async function loadEventsForClone() {
-              try {
-                  const response = await fetch('/api/events');
-                  const events = await response.json();
-                  const select = document.getElementById('targetEventId');
-                  events.forEach(event => {
-                      const option = document.createElement('option');
-                      option.value = event.id;
-                      option.textContent = `${event.title} (${new Date(event.startDate).toLocaleDateString()})`;
-                      select.appendChild(option);
-                  });
-              } catch (error) {
-                  console.error('Eroare la încărcarea evenimentelor:', error);
-              }
-          }
-
-          document.getElementById('confirmClone').addEventListener('click', async function () {
-              const cloneData = {
-                  sourcePollId: parseInt(document.getElementById('sourcePollId').value),
-                  targetEventId: document.getElementById('targetEventId').value || null,
-                  newQuestion: document.getElementById('newQuestion').value || null,
-                  deepClone: document.getElementById('deepClone').checked
-              };
-              try {
-                  const response = await fetch('/api/polls/clone', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(cloneData)
-                  });
-                  if (response.ok) {
-                      const newPoll = await response.json();
-                      alert(`Sondaj clonat cu succes! ID nou: ${newPoll.id}`);
-                      window.location.href = `/Polls/Details?id=${newPoll.id}`;
-                  } else {
-                      const error = await response.json();
-                      alert('Eroare: ' + error.error);
-                  }
-              } catch (error) {
-                  alert('Eroare de rețea');
-              }
-          });
-
-          loadEventsForClone();
-     </script>
-</div>
+}
 
 @section Scripts {
      <script>
-          const pollId = new URLSearchParams(window.location.search).get('id');
+          const pollId       = new URLSearchParams(window.location.search).get('id');
+          const isOrganizer  = @Json.Serialize(isOrganizer);
+          const isAuthenticated = @Json.Serialize(isAuthenticated);
 
-          // ── Adapter: wire up export links ──────────────────────────────────
-          document.getElementById('exportJson').href = `/api/export/poll/${pollId}?format=json`;
-          document.getElementById('exportTxt').href  = `/api/export/poll/${pollId}?format=txt`;
+          // Export links for organizers
+          const exportJson = document.getElementById('exportJson');
+          const exportTxt  = document.getElementById('exportTxt');
+          if (exportJson) exportJson.href = `/api/export/poll/${pollId}?format=json`;
+          if (exportTxt)  exportTxt.href  = `/api/export/poll/${pollId}?format=txt`;
 
-          // ── Load poll data ─────────────────────────────────────────────────
           async function loadPoll() {
               try {
-                  // Fetch flat poll data (for results + voting)
-                  const [pollRes, treeRes] = await Promise.all([
+                  // FIX: use /results endpoint for vote counts — not cached
+                  const [pollRes, resultsRes] = await Promise.all([
                       fetch(`/api/polls/${pollId}`),
-                      fetch(`/api/polls/${pollId}/tree`)
+                      fetch(`/api/polls/${pollId}/results`)
                   ]);
 
-                  if (!pollRes.ok) throw new Error('Poll not found');
+                  if (!pollRes.ok) throw new Error('Sondaj negăsit');
 
-                  const poll = await pollRes.json();
-                  // Tree may not exist yet if endpoint not wired — fall back gracefully
-                  const tree = treeRes.ok ? await treeRes.json() : null;
+                  const poll    = await pollRes.json();
+                  // Results has fresh vote counts, merge options from it
+                  const results = resultsRes.ok ? await resultsRes.json() : poll;
 
-                  console.log('Tree data:', JSON.stringify(tree, null, 2));
-
-                  document.getElementById('pollQuestion').textContent = poll.question;
-                  document.getElementById('pollStatus').textContent   = poll.isActive ? 'Activ' : 'Închis';
+                  document.getElementById('pollQuestion').textContent  = poll.question;
+                  document.getElementById('pollStatus').textContent    = poll.isActive ? 'Activ' : 'Închis';
                   document.getElementById('pollTypeBadge').textContent =
                       poll.allowMultipleChoices ? '✅ Multiple Choice' : '🔘 Single Choice';
 
-                  // Use composite tree for vote options if available, flat list as fallback
-                  if (tree) {
-                      renderCompositeOptions(tree, poll);
-                  } else {
-                      renderFlatOptions(poll);
-                  }
-
-                  renderResults(poll);
+                  renderVoteOptions(poll);
+                  // Use results (fresh) for vote count display
+                  renderResults(results);
 
                   document.getElementById('loadingSpinner').style.display = 'none';
                   document.getElementById('pollDetails').style.display    = 'block';
@@ -199,142 +166,120 @@
               }
           }
 
-          // ── Composite: render grouped option tree ──────────────────────────
-          function renderCompositeOptions(tree, poll) {
-              const container = document.getElementById('voteOptions');
-
-              if (!poll.isActive) {
-                  container.innerHTML = '<p class="text-muted">Acest sondaj este închis.</p>';
-                  document.getElementById('submitVote').disabled = true;
-                  return;
-              }
-
-              const inputType = poll.allowMultipleChoices ? 'checkbox' : 'radio';
-              container.innerHTML = renderNode(tree, inputType, true);
-          }
-
-          // Recursively renders a composite node (group or leaf)
-          function renderNode(node, inputType, isRoot = false) {
-              // Schimbă din node.type === 'group' și node.type === 'leaf'
-              if (node.type === 'group') {
-                  // Root group is the poll itself — don't render it as a collapsible header
-                  if (isRoot) {
-                      return node.children.map(c => renderNode(c, inputType)).join('');
-                  }
-
-                  const groupId = `group-${node.id}`;
-                  const childrenHtml = node.children.map(c => renderNode(c, inputType)).join('');
-
-                  return `
-                      <div class="mb-3 border rounded">
-                          <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-light"
-                               style="cursor:pointer" onclick="toggleGroup('${groupId}')">
-                              <strong class="text-secondary">
-                                  <span class="me-1">📂</span>${node.text}
-                              </strong>
-                              <span id="${groupId}-icon" class="text-muted small">▲</span>
-                          </div>
-                          <div id="${groupId}" class="px-3 pt-2 pb-1">
-                              ${childrenHtml}
-                          </div>
-                      </div>
-                  `;
-              }
-
-              // Leaf node — single vote option (type = "option" în backend)
-              return `
-                  <div class="form-check">
-                      <input class="form-check-input" type="${inputType}"
-                             name="voteOption" value="${node.id}" id="opt${node.id}">
-                      <label class="form-check-label" for="opt${node.id}">
-                          ${node.text}
-                      </label>
-                  </div>
-              `;
-          }
-
-          function toggleGroup(groupId) {
-              const el   = document.getElementById(groupId);
-              const icon = document.getElementById(`${groupId}-icon`);
-              if (el.style.display === 'none') {
-                  el.style.display = '';
-                  icon.textContent = '▲';
-              } else {
-                  el.style.display = 'none';
-                  icon.textContent = '▼';
-              }
-          }
-
-          // Flat fallback (used when tree endpoint not available)
-          function renderFlatOptions(poll) {
+          function renderVoteOptions(poll) {
               const container = document.getElementById('voteOptions');
               if (!poll.isActive) {
                   container.innerHTML = '<p class="text-muted">Acest sondaj este închis.</p>';
-                  document.getElementById('submitVote').disabled = true;
+                  const btn = document.getElementById('submitVote');
+                  if (btn) btn.disabled = true;
                   return;
               }
+
               const inputType = poll.allowMultipleChoices ? 'checkbox' : 'radio';
               container.innerHTML = poll.options.map(option => `
                   <div class="form-check">
                       <input class="form-check-input" type="${inputType}"
                              name="voteOption" value="${option.id}" id="opt${option.id}">
-                      <label class="form-check-label" for="opt${option.id}">${option.text}</label>
+                      <label class="form-check-label" for="opt${option.id}">
+                          ${option.text}
+                      </label>
                   </div>
               `).join('');
           }
 
-          // ── Results (unchanged logic, unchanged look) ──────────────────────
           function renderResults(poll) {
               const container = document.getElementById('results');
-              if (!poll.options || poll.options.length === 0) {
+              if (!poll.options?.length) {
                   container.innerHTML = '<p>Nu există rezultate încă.</p>';
                   return;
               }
-              let html = '<ul class="list-group">';
-              poll.options.forEach(option => {
-                  html += `
+              container.innerHTML = '<ul class="list-group">' +
+                  poll.options.map(option => `
                       <li class="list-group-item d-flex justify-content-between align-items-center">
                           ${option.text}
                           <span class="badge bg-primary rounded-pill">
                               ${option.voteCount} voturi (${option.percentage || 0}%)
                           </span>
                       </li>
-                  `;
-              });
-              html += '</ul>';
-              container.innerHTML = html;
+                  `).join('') +
+              '</ul>';
           }
 
-          // ── Submit vote (unchanged) ────────────────────────────────────────
-          document.getElementById('submitVote').addEventListener('click', async function () {
-              const selected = [];
-              document.querySelectorAll('input[name="voteOption"]:checked').forEach(cb => {
-                  selected.push(parseInt(cb.value));
+          // Submit vote
+          const submitBtn = document.getElementById('submitVote');
+          if (submitBtn) {
+              submitBtn.addEventListener('click', async () => {
+                  const selected = [...document.querySelectorAll('input[name="voteOption"]:checked')]
+                      .map(cb => parseInt(cb.value));
+
+                  if (!selected.length) {
+                      alert('Selectează cel puțin o opțiune.');
+                      return;
+                  }
+
+                  try {
+                      const res = await fetch(`/api/polls/${pollId}/votes`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ pollId: parseInt(pollId), selectedOptionIds: selected })
+                      });
+
+                      if (res.ok) {
+                          alert('Vot înregistrat!');
+                          loadPoll(); // reload fresh results
+                      } else {
+                          const err = await res.json();
+                          alert(err.error || 'Eroare la vot');
+                      }
+                  } catch {
+                      alert('Eroare de rețea');
+                  }
+              });
+          }
+
+          // Clone modal — organizers only
+          const confirmClone = document.getElementById('confirmClone');
+          if (confirmClone) {
+              async function loadEventsForClone() {
+                  try {
+                      const res    = await fetch('/api/events');
+                      const events = await res.json();
+                      const select = document.getElementById('targetEventId');
+                      events.forEach(e => {
+                          const opt = document.createElement('option');
+                          opt.value = e.id;
+                          opt.textContent = `${e.title} (${new Date(e.startDate).toLocaleDateString()})`;
+                          select.appendChild(opt);
+                      });
+                  } catch {}
+              }
+
+              confirmClone.addEventListener('click', async () => {
+                  const cloneData = {
+                      sourcePollId: parseInt(document.getElementById('sourcePollId').value),
+                      targetEventId: document.getElementById('targetEventId').value || null,
+                      newQuestion: document.getElementById('newQuestion').value || null,
+                      deepClone: document.getElementById('deepClone').checked
+                  };
+                  try {
+                      const res = await fetch('/api/polls/clone', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(cloneData)
+                      });
+                      if (res.ok) {
+                          const newPoll = await res.json();
+                          alert(`Sondaj clonat! ID nou: ${newPoll.id}`);
+                          window.location.href = `/Polls/Details?id=${newPoll.id}`;
+                      } else {
+                          const err = await res.json();
+                          alert('Eroare: ' + err.error);
+                      }
+                  } catch { alert('Eroare de rețea'); }
               });
 
-              if (selected.length === 0) {
-                  alert('Selectează cel puțin o opțiune.');
-                  return;
-              }
-
-              try {
-                  const response = await fetch(`/api/polls/${pollId}/votes`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ pollId: parseInt(pollId), selectedOptionIds: selected })
-                  });
-
-                  if (response.ok) {
-                      alert('Vot înregistrat!');
-                      loadPoll();
-                  } else {
-                      const error = await response.json();
-                      alert(error.error || 'Eroare la vot');
-                  }
-              } catch (error) {
-                  alert('Eroare de rețea');
-              }
-          });
+              loadEventsForClone();
+          }
 
           loadPoll();
      </script>

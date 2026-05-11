@@ -1,14 +1,18 @@
 ﻿@page
 @{
      Layout = "_Layout";
-     ViewData["Title"] = "Events";
+     ViewData["Title"] = "Evenimente";
+     bool isOrganizer = User.IsInRole("Organizer");
 }
 
 <div class="container mt-4">
-     <h1>Events</h1>
-
-     <div class="d-flex justify-content-between mb-4">
-          <a href="/Events/Create" class="btn btn-primary">Create New Event</a>
+     <div class="d-flex justify-content-between align-items-center mb-4">
+          <h1>Evenimente</h1>
+          @* Only organizers see Create Event button *@
+          @if (isOrganizer)
+          {
+               <a href="/Events/Create" class="btn btn-primary">+ Eveniment nou</a>
+          }
      </div>
 
      <div id="eventsList" class="row">
@@ -16,85 +20,71 @@
                <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Loading...</span>
                </div>
-               <p class="mt-2">Loading events...</p>
+               <p class="mt-2">Se încarcă evenimentele...</p>
           </div>
      </div>
 </div>
 
 @section Scripts {
      <script>
-          console.log('Events page loaded, loading events...');
+          const isOrganizer = @Json.Serialize(isOrganizer);
 
           async function loadEvents() {
-              console.log('loadEvents function called');
-
               const container = document.getElementById('eventsList');
-              if (!container) {
-                  console.error('ERROR: eventsList element not found in DOM!');
-                  console.log('Available elements with IDs:',
-                      Array.from(document.querySelectorAll('[id]')).map(el => el.id));
-                  return;
-              }
-
               try {
-                  console.log('Fetching from /api/events...');
                   const response = await fetch('/api/events');
-                  console.log('Response received:', response.status);
-
-                  if (!response.ok) {
-                      throw new Error(`HTTP error! status: ${response.status}`);
-                  }
+                  if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
 
                   const events = await response.json();
-                  console.log('Events data:', events);
 
                   if (!events || events.length === 0) {
-                      container.innerHTML = '<div class="col-12 text-center py-5"><p class="lead">No events found. Create the first one!</p></div>';
+                      container.innerHTML = '<div class="col-12 text-center py-5"><p class="lead">Nu există evenimente. Creează primul!</p></div>';
                       return;
                   }
 
-                  let html = '';
-                  events.forEach(event => {
+                  container.innerHTML = events.map(event => {
                       const startDate = new Date(event.startDate).toLocaleString();
-                      html += `
+                      const statusBadge = event.isActive
+                          ? '<span class="badge bg-success">Activ</span>'
+                          : '<span class="badge bg-secondary">Inactiv</span>';
+
+                      return `
                           <div class="col-md-4 mb-4">
                               <div class="card h-100">
                                   <div class="card-body">
-                                      <h5 class="card-title">${event.title}</h5>
-                                      <p class="card-text">${event.description.substring(0, 100)}${event.description.length > 100 ? '...' : ''}</p>
+                                      <div class="d-flex justify-content-between align-items-start mb-2">
+                                          <h5 class="card-title mb-0">${event.title}</h5>
+                                          ${statusBadge}
+                                      </div>
+                                      <p class="card-text text-muted">
+                                          ${event.description.substring(0, 100)}${event.description.length > 100 ? '...' : ''}
+                                      </p>
                                       <p class="card-text">
                                           <small class="text-muted">
                                               📅 ${startDate}<br>
                                               📍 ${event.location}<br>
-                                              👥 Max: ${event.maxParticipants} | 📊 Polls: ${event.pollCount}
+                                              👥 Max: ${event.maxParticipants} &nbsp;|&nbsp; 📊 Sondaje: ${event.pollCount}
                                           </small>
                                       </p>
-                                      <a href="/Events/Details/${event.id}" class="btn btn-outline-primary btn-sm">View Details</a>
+                                      <a href="/Events/Details/${event.id}" class="btn btn-outline-primary btn-sm">
+                                          Vezi detalii
+                                      </a>
                                   </div>
                               </div>
                           </div>
                       `;
-                  });
-
-                  container.innerHTML = html;
+                  }).join('');
 
               } catch (error) {
-                  console.error('Error in loadEvents:', error);
-                  if (container) {
-                      container.innerHTML = `
-                          <div class="col-12 text-center text-danger">
-                              <p>Error loading events: ${error.message}</p>
-                              <button onclick="loadEvents()" class="btn btn-primary mt-3">Retry</button>
-                          </div>
-                      `;
-                  }
+                  container.innerHTML = `
+                      <div class="col-12 text-center text-danger">
+                          <p>Eroare la încărcarea evenimentelor: ${error.message}</p>
+                          <button onclick="loadEvents()" class="btn btn-primary mt-3">Reîncearcă</button>
+                      </div>
+                  `;
               }
           }
 
-          // Run when page loads
-          document.addEventListener('DOMContentLoaded', function() {
-              console.log('DOM fully loaded, calling loadEvents');
-              loadEvents();
-          });
+          document.addEventListener('DOMContentLoaded', loadEvents);
      </script>
 }

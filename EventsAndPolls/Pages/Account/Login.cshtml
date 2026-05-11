@@ -1,0 +1,51 @@
+﻿@page
+@model EventsAndPolls.Pages.Account.LoginModel
+@{
+     Layout = "_Layout";
+     ViewData["Title"] = "Autentificare";
+}
+
+<div class="container mt-5">
+     <div class="row justify-content-center">
+          <div class="col-md-5">
+               <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                         <h2 class="card-title mb-4 text-center">Autentificare</h2>
+
+                         <form method="post">
+                              <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                              <div class="mb-3">
+                                   <label asp-for="Input.Email" class="form-label">Email</label>
+                                   <input asp-for="Input.Email" class="form-control" placeholder="email@exemplu.com" />
+                                   <span asp-validation-for="Input.Email" class="text-danger"></span>
+                              </div>
+
+                              <div class="mb-3">
+                                   <label asp-for="Input.Password" class="form-label">Parolă</label>
+                                   <input asp-for="Input.Password" class="form-control" type="password" />
+                                   <span asp-validation-for="Input.Password" class="text-danger"></span>
+                              </div>
+
+                              <div class="mb-3 form-check">
+                                   <input asp-for="Input.RememberMe" class="form-check-input" />
+                                   <label asp-for="Input.RememberMe" class="form-check-label">Ține-mă minte</label>
+                              </div>
+
+                              <div class="d-grid">
+                                   <button type="submit" class="btn btn-primary">Autentifică-te</button>
+                              </div>
+
+                              <div class="text-center mt-3">
+                                   <a asp-page="/Account/Register">Nu ai cont? Înregistrează-te</a>
+                              </div>
+                         </form>
+                    </div>
+               </div>
+          </div>
+     </div>
+</div>
+
+@section Scripts {
+     <partial name="_ValidationScriptsPartial" />
+}

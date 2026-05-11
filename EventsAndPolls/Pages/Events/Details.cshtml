@@ -1,12 +1,14 @@
 ﻿@page "{id}"
+@using Microsoft.AspNetCore.Identity
+@inject Microsoft.AspNetCore.Http.IHttpContextAccessor HttpContextAccessor
 @{
      Layout = "_Layout";
      ViewData["Title"] = "Event Details";
+     bool isOrganizer = User.IsInRole("Organizer");
+     bool isAuthenticated = User.Identity?.IsAuthenticated == true;
 }
 
 <div class="container mt-4">
-     <div id="message" class="alert" style="display: none;"></div>
-
      <div id="loadingSpinner" class="text-center">
           <div class="spinner-border text-primary" role="status">
                <span class="visually-hidden">Loading...</span>
@@ -19,28 +21,28 @@
           </div>
           <p id="eventDescription" class="lead"></p>
 
+          @* Export bar — visible to everyone *@
           <div class="d-flex align-items-center gap-2 mb-4">
-               <span class="text-muted small">Export event:</span>
-               <a id="exportJson" href="#" class="btn btn-sm btn-outline-secondary">
-                    ⬇ JSON
-               </a>
-               <a id="exportTxt" href="#" class="btn btn-sm btn-outline-secondary">
-                    ⬇ Text Report
-               </a>
+               <span class="text-muted small">Export:</span>
+               <a id="exportJson" href="#" class="btn btn-sm btn-outline-secondary">⬇ JSON</a>
+               <a id="exportTxt" href="#" class="btn btn-sm btn-outline-secondary">⬇ Text Report</a>
           </div>
 
           <div class="row mt-2">
                <div class="col-md-8">
                     <div class="card mb-4">
-                         <div class="card-header">
-                              <h5>Polls</h5>
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                              <h5 class="mb-0">Sondaje</h5>
+                              @* Only organizers see Create Poll button *@
+                              @if (isOrganizer)
+                              {
+                                   <a id="createPollBtn" href="#" class="btn btn-success btn-sm">+ Sondaj nou</a>
+                              }
                          </div>
                          <div class="card-body">
                               <div id="pollsList">
-                                   <p class="text-muted">Loading polls...</p>
+                                   <p class="text-muted">Se încarcă sondajele...</p>
                               </div>
-                              <a href="/Polls/Create?eventId=@(ViewContext.RouteData.Values["id"])"
-                                 class="btn btn-success mt-3">Create New Poll</a>
                          </div>
                     </div>
                </div>
@@ -48,16 +50,25 @@
                <div class="col-md-4">
                     <div class="card">
                          <div class="card-header">
-                              <h5>Event Info</h5>
+                              <h5>Detalii eveniment</h5>
                          </div>
                          <div class="card-body">
                               <ul class="list-unstyled">
                                    <li><strong>Start:</strong> <span id="startDate"></span></li>
-                                   <li><strong>End:</strong> <span id="endDate"></span></li>
-                                   <li><strong>Location:</strong> <span id="location"></span></li>
-                                   <li><strong>Max Participants:</strong> <span id="maxParticipants"></span></li>
-                                   <li><strong>Created:</strong> <span id="createdAt"></span></li>
+                                   <li><strong>Sfârșit:</strong> <span id="endDate"></span></li>
+                                   <li><strong>Locație:</strong> <span id="location"></span></li>
+                                   <li><strong>Max participanți:</strong> <span id="maxParticipants"></span></li>
+                                   <li><strong>Creat:</strong> <span id="createdAt"></span></li>
                               </ul>
+
+                              @* Only organizers see edit/delete *@
+                              @if (isOrganizer)
+                              {
+                                   <div class="mt-3 d-flex gap-2">
+                                        <a id="editEventBtn" href="#" class="btn btn-outline-warning btn-sm">✏️ Editează</a>
+                                        <button id="deleteEventBtn" class="btn btn-outline-danger btn-sm">🗑️ Șterge</button>
+                                   </div>
+                              }
                          </div>
                     </div>
                </div>
@@ -65,20 +76,25 @@
      </div>
 
      <div class="mt-3">
-          <a href="/Events" class="btn btn-secondary">Back to Events</a>
+          <a href="/Events" class="btn btn-secondary">Înapoi la evenimente</a>
      </div>
 </div>
 
 @section Scripts {
      <script>
-          console.log('🔵 Details page loaded');
-
           const pathParts = window.location.pathname.split('/');
           const eventId = pathParts[pathParts.length - 1];
 
-          // ── Adapter: wire up export links once we have the eventId ─────────
+          const isOrganizer = @Json.Serialize(isOrganizer);
+          const isAuthenticated = @Json.Serialize(isAuthenticated);
+
+          // Wire export links
           document.getElementById('exportJson').href = `/api/export/event/${eventId}?format=json`;
           document.getElementById('exportTxt').href  = `/api/export/event/${eventId}?format=txt`;
+
+          // Wire create poll button for organizers
+          const createPollBtn = document.getElementById('createPollBtn');
+          if (createPollBtn) createPollBtn.href = `/Polls/Create?eventId=${eventId}`;
 
           async function loadEventDetails() {
               try {
@@ -87,62 +103,92 @@
 
                   const event = await response.json();
 
-                  document.getElementById('eventTitle').textContent        = event.title;
-                  document.getElementById('eventDescription').textContent  = event.description;
-                  document.getElementById('startDate').textContent         = new Date(event.startDate).toLocaleString();
-                  document.getElementById('endDate').textContent           = new Date(event.endDate).toLocaleString();
-                  document.getElementById('location').textContent          = event.location;
-                  document.getElementById('maxParticipants').textContent   = event.maxParticipants;
-                  document.getElementById('createdAt').textContent         = new Date(event.createdAt).toLocaleDateString();
+                  document.getElementById('eventTitle').textContent       = event.title;
+                  document.getElementById('eventDescription').textContent = event.description;
+                  document.getElementById('startDate').textContent        = new Date(event.startDate).toLocaleString();
+                  document.getElementById('endDate').textContent          = new Date(event.endDate).toLocaleString();
+                  document.getElementById('location').textContent         = event.location;
+                  document.getElementById('maxParticipants').textContent  = event.maxParticipants;
+                  document.getElementById('createdAt').textContent        = new Date(event.createdAt).toLocaleDateString();
+
+                  // Wire edit/delete buttons for organizers
+                  const editBtn = document.getElementById('editEventBtn');
+                  if (editBtn) editBtn.href = `/Events/Edit/${eventId}`;
+
+                  const deleteBtn = document.getElementById('deleteEventBtn');
+                  if (deleteBtn) {
+                      deleteBtn.addEventListener('click', async () => {
+                          if (!confirm('Ești sigur că vrei să ștergi acest eveniment?')) return;
+                          const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+                          if (res.ok) window.location.href = '/Events';
+                          else alert('Eroare la ștergere');
+                      });
+                  }
 
                   document.getElementById('loadingSpinner').style.display = 'none';
                   document.getElementById('eventDetails').style.display   = 'block';
 
                   loadPolls();
               } catch (error) {
-                  console.error('❌ Error:', error);
-                  document.getElementById('loadingSpinner').innerHTML = `
-                      <div class="alert alert-danger">
-                          Error loading event: ${error.message}
-                      </div>
-                  `;
+                  document.getElementById('loadingSpinner').innerHTML =
+                      `<div class="alert alert-danger">Eroare: ${error.message}</div>`;
               }
           }
 
-          function loadPolls() {
-              fetch(`/api/events/${eventId}/polls`)
-                  .then(response => response.json())
-                  .then(polls => {
-                      const container = document.getElementById('pollsList');
-                      if (polls.length === 0) {
-                          container.innerHTML = '<p class="text-muted">Nu există sondaje.</p>';
-                          return;
-                      }
+          // FIX: always fetches fresh data — bypasses cache via results endpoint
+          async function loadPolls() {
+              const container = document.getElementById('pollsList');
+              try {
+                  // Get the poll list (may be cached — that's fine, we only need ids and questions)
+                  const res = await fetch(`/api/events/${eventId}/polls`);
+                  const polls = await res.json();
 
-                      let html = '';
-                      polls.forEach(poll => {
-                          const icon = poll.allowMultipleChoices ? '☑️' : '🔘';
-                          html += `
-                              <div class="card mb-2">
-                                  <div class="card-body">
-                                      <div class="d-flex justify-content-between">
-                                          <h6>${icon} ${poll.question}</h6>
-                                          <span class="badge bg-secondary">${poll.totalVotes} voturi</span>
-                                      </div>
-                                      <div class="d-flex gap-2 mt-2">
-                                          <a href="/Polls/Details?id=${poll.id}"
-                                             class="btn btn-sm btn-outline-primary">Vezi sondaj</a>
-                                          <a href="/api/export/poll/${poll.id}?format=json"
-                                             class="btn btn-sm btn-outline-secondary">⬇ JSON</a>
-                                          <a href="/api/export/poll/${poll.id}?format=txt"
-                                             class="btn btn-sm btn-outline-secondary">⬇ Text</a>
-                                      </div>
+                  if (!polls.length) {
+                      container.innerHTML = '<p class="text-muted">Nu există sondaje încă.</p>';
+                      return;
+                  }
+
+                  // Fetch fresh results for each poll individually (not cached)
+                  const pollsWithResults = await Promise.all(
+                      polls.map(async poll => {
+                          const resultsRes = await fetch(`/api/polls/${poll.id}/results`);
+                          if (resultsRes.ok) {
+                              const fresh = await resultsRes.json();
+                              return { ...poll, totalVotes: fresh.totalVotes };
+                          }
+                          return poll;
+                      })
+                  );
+
+                  container.innerHTML = pollsWithResults.map(poll => {
+                      const icon = poll.allowMultipleChoices ? '☑️' : '🔘';
+                      const organizerButtons = isOrganizer ? `
+                          <a href="/api/export/poll/${poll.id}?format=json"
+                             class="btn btn-sm btn-outline-secondary">⬇ JSON</a>
+                          <a href="/api/export/poll/${poll.id}?format=txt"
+                             class="btn btn-sm btn-outline-secondary">⬇ Text</a>
+                      ` : '';
+
+                      return `
+                          <div class="card mb-2">
+                              <div class="card-body">
+                                  <div class="d-flex justify-content-between align-items-center">
+                                      <h6 class="mb-0">${icon} ${poll.question}</h6>
+                                      <span class="badge bg-secondary">${poll.totalVotes} voturi</span>
+                                  </div>
+                                  <div class="d-flex gap-2 mt-2 flex-wrap">
+                                      <a href="/Polls/Details?id=${poll.id}"
+                                         class="btn btn-sm btn-outline-primary">Vezi sondaj</a>
+                                      ${organizerButtons}
                                   </div>
                               </div>
-                          `;
-                      });
-                      container.innerHTML = html;
-                  });
+                          </div>
+                      `;
+                  }).join('');
+
+              } catch (error) {
+                  container.innerHTML = `<p class="text-danger">Eroare: ${error.message}</p>`;
+              }
           }
 
           loadEventDetails();

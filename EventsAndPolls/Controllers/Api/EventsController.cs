@@ -1,6 +1,7 @@
 ﻿using EventsAndPolls.Application.DTOs.Requests;
-using EventsAndPolls.Application.DTOs.Responses;
 using EventsAndPolls.Application.Services;
+using EventsAndPolls.Infrastructure.Identity;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EventsAndPolls.Controllers.Api;
@@ -9,134 +10,123 @@ namespace EventsAndPolls.Controllers.Api;
 [ApiController]
 public class EventsController : ControllerBase
 {
-     private readonly IEventService _eventService;
-     private readonly ILogger<EventsController> _logger;
-     private readonly IPollService _pollService;
+    private readonly IEventService _eventService;
+    private readonly IPollService _pollService;
+    private readonly ILogger<EventsController> _logger;
 
-     public EventsController(IEventService eventService, ILogger<EventsController> logger, IPollService pollService)
-     {
-          _eventService = eventService;
-          _logger = logger;
-          _pollService = pollService;
-     }
+    public EventsController(
+        IEventService eventService,
+        IPollService pollService,
+        ILogger<EventsController> logger)
+    {
+        _eventService = eventService;
+        _pollService = pollService;
+        _logger = logger;
+    }
 
-     [HttpGet]
-     public async Task<ActionResult<IEnumerable<EventDto>>> GetEvents()
-     {
-          try
-          {
-               var events = await _eventService.GetUpcomingEventsAsync();
-               return Ok(events);
-          }
-          catch (Exception ex)
-          {
-               _logger.LogError(ex, "Error getting events");
-               return StatusCode(500, new { error = "An error occurred" });
-          }
-     }
+    // Public — anyone can view events
+    [HttpGet]
+    public async Task<IActionResult> GetEvents()
+    {
+        try
+        {
+            var events = await _eventService.GetUpcomingEventsAsync();
+            return Ok(events);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting all events");
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
 
-     [HttpGet("{id}")]
-     public async Task<ActionResult<EventDto>> GetEvent(int id)
-     {
-          try
-          {
-               var @event = await _eventService.GetEventByIdAsync(id);
-               if (@event == null)
-                    return NotFound(new { error = $"Event with ID {id} not found" });
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetEvent(int id)
+    {
+        try
+        {
+            var @event = await _eventService.GetEventByIdAsync(id);
+            if (@event == null) return NotFound(new { error = $"Event {id} not found" });
+            return Ok(@event);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting event {EventId}", id);
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
 
-               return Ok(@event);
-          }
-          catch (Exception ex)
-          {
-               _logger.LogError(ex, "Error getting event {EventId}", id);
-               return StatusCode(500, new { error = "An error occurred" });
-          }
-     }
+    [HttpGet("{id}/polls")]
+    public async Task<IActionResult> GetEventPolls(int id)
+    {
+        try
+        {
+            var polls = await _pollService.GetPollsByEventAsync(id);
+            return Ok(polls);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting polls for event {EventId}", id);
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
 
-     [HttpPost]
-     public async Task<ActionResult<EventDto>> CreateEvent([FromBody] CreateEventDto createDto)
-     {
-          try
-          {
-               if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
+    // Organizer only — must be logged in and have Organizer role
+    [HttpPost]
+    [Authorize(Roles = Roles.Organizer)]
+    public async Task<IActionResult> CreateEvent([FromBody] CreateEventDto dto)
+    {
+        try
+        {
+            // Use real authenticated user ID
+            var organizerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(organizerId))
+                return Unauthorized(new { error = "User not authenticated" });
 
-               // In real app, get from authentication
-               var organizerId = User.Identity?.Name ?? "system-user";
+            var @event = await _eventService.CreateEventAsync(dto, organizerId);
+            return CreatedAtAction(nameof(GetEvent), new { id = @event.Id }, @event);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating event");
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
 
-               var result = await _eventService.CreateEventAsync(createDto, organizerId);
-               return CreatedAtAction(nameof(GetEvent), new { id = result.Id }, result);
-          }
-          catch (ArgumentException ex)
-          {
-               return BadRequest(new { error = ex.Message });
-          }
-          catch (Exception ex)
-          {
-               _logger.LogError(ex, "Error creating event");
-               return StatusCode(500, new { error = "An error occurred" });
-          }
-     }
-
-     [HttpPut("{id}")]
-     public async Task<IActionResult> UpdateEvent(int id, [FromBody] UpdateEventDto updateDto)
-     {
-          try
-          {
+    [HttpPut("{id}")]
+    [Authorize(Roles = Roles.Organizer)]
+    public async Task<IActionResult> UpdateEvent(int id, [FromBody] UpdateEventDto updateDto)
+    {
+        try
+        {
                if (id != updateDto.Id)
                     return BadRequest(new { error = "ID mismatch" });
-
-               var result = await _eventService.UpdateEventAsync(updateDto);
-               return Ok(result);
-          }
-          catch (ArgumentException ex)
-          {
-               return NotFound(new { error = ex.Message });
-          }
-          catch (Exception ex)
-          {
-               _logger.LogError(ex, "Error updating event {EventId}", id);
-               return StatusCode(500, new { error = "An error occurred" });
-          }
-     }
+            var organizerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            var updated = await _eventService.UpdateEventAsync(updateDto);
+            if (updated == null) return NotFound(new { error = $"Event {id} not found or not yours" });
+            return Ok(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating event {EventId}", id);
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
 
      [HttpDelete("{id}")]
-     public async Task<IActionResult> DeleteEvent(int id)
-     {
-          try
-          {
-               await _eventService.DeleteEventAsync(id);
-               return Ok(new { message = "Event deleted successfully" });
-          }
-          catch (Exception ex)
-          {
-               _logger.LogError(ex, "Error deleting event {EventId}", id);
-               return StatusCode(500, new { error = "An error occurred" });
-          }
-     }
-     [HttpGet("{id}/polls")]
-     public async Task<ActionResult<IEnumerable<PollDto>>> GetEventPolls(int id)
-     {
-          try
-          {
-               Console.WriteLine($"GET /api/events/{id}/polls called");
-
-               // First check if event exists
-               var eventExists = await _eventService.GetEventByIdAsync(id);
-               if (eventExists == null)
-               {
-                    return NotFound(new { error = $"Event with ID {id} not found" });
-               }
-
-               // Get polls for this event
-               var polls = await _pollService.GetPollsByEventAsync(id);
-
-               return Ok(polls);
-          }
-          catch (Exception ex)
-          {
-               Console.WriteLine($"Error getting polls for event {id}: {ex.Message}");
-               return StatusCode(500, new { error = ex.Message });
-          }
-     }
+    [Authorize(Roles = Roles.Organizer)]
+    public async Task<IActionResult> DeleteEvent(int id)
+    {
+        try
+        {
+            var organizerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            await _eventService.DeleteEventAsync(id);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting event {EventId}", id);
+            return StatusCode(500, new { error = "An error occurred" });
+        }
+    }
 }

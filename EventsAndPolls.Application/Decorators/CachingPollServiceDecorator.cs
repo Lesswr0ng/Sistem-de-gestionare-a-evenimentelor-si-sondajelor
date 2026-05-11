@@ -71,19 +71,27 @@ public class CachingPollServiceDecorator : IPollService
           return await _inner.GetPollResultsAsync(pollId);
      }
 
-     // Write operations — not cached, invalidate related cache entries
-     public async Task<PollDto> CreatePollAsync(CreatePollDto dto)
+     public async Task<VoteResultDto> CastVoteAsync(CastVoteDto dto, string userId)
      {
-          var result = await _inner.CreatePollAsync(dto);
-          // Invalidate the event's poll list so next read gets fresh data
-          _cache.Remove(EventPollsCacheKey(dto.EventId));
-          _logger.LogInformation("[Decorator:Cache] INVALIDATED — event polls cache for EventId: {EventId}", dto.EventId);
+          var poll = await _inner.GetPollByIdAsync(dto.PollId);
+
+          var result = await _inner.CastVoteAsync(dto, userId);
+
+          _cache.Remove(PollCacheKey(dto.PollId));
+          if (poll != null)
+               _cache.Remove(EventPollsCacheKey(poll.EventId));
+
+          _logger.LogInformation("[Decorator:Cache] INVALIDATED — poll {PollId} and its event polls cache", dto.PollId);
+
           return result;
      }
 
-     public async Task<VoteResultDto> CastVoteAsync(CastVoteDto dto, string userId)
+     public async Task<PollDto> CreatePollAsync(CreatePollDto dto)
      {
-          return await _inner.CastVoteAsync(dto, userId);
+          var result = await _inner.CreatePollAsync(dto);
+          _cache.Remove(EventPollsCacheKey(dto.EventId));
+          _logger.LogInformation("[Decorator:Cache] INVALIDATED — event polls cache for EventId: {EventId}", dto.EventId);
+          return result;
      }
 
      public async Task DeletePollAsync(int id)
@@ -91,7 +99,6 @@ public class CachingPollServiceDecorator : IPollService
           var poll = await _inner.GetPollByIdAsync(id);
           await _inner.DeletePollAsync(id);
 
-          // Invalidate both the poll cache and its event's list
           _cache.Remove(PollCacheKey(id));
           if (poll != null)
                _cache.Remove(EventPollsCacheKey(poll.EventId));

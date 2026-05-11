@@ -1,9 +1,10 @@
 ﻿using EventsAndPolls.Domain.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace EventsAndPolls.Infrastructure.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
      public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -15,6 +16,7 @@ public class AppDbContext : DbContext
 
      protected override void OnModelCreating(ModelBuilder modelBuilder)
      {
+          // IMPORTANT: must call base first — Identity needs to configure its own tables
           base.OnModelCreating(modelBuilder);
 
           // Event configuration
@@ -23,7 +25,15 @@ public class AppDbContext : DbContext
                entity.HasKey(e => e.Id);
                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
                entity.Property(e => e.Location).IsRequired().HasMaxLength(200);
+
+               // FK to ApplicationUser — organizer who created the event
+               // string because IdentityUser.Id is a string (GUID)
                entity.Property(e => e.OrganizerId).IsRequired();
+
+               entity.HasOne<ApplicationUser>()
+                     .WithMany(u => u.OrganizedEvents)
+                     .HasForeignKey(e => e.OrganizerId)
+                     .OnDelete(DeleteBehavior.Restrict);
           });
 
           // Poll configuration
@@ -47,7 +57,7 @@ public class AppDbContext : DbContext
                entity.HasOne(po => po.Poll)
                      .WithMany(p => p.Options)
                      .HasForeignKey(po => po.PollId)
-                     .OnDelete(DeleteBehavior.Cascade);
+                     .OnDelete(DeleteBehavior.NoAction);
 
                entity.HasOne(po => po.Group)
                      .WithMany(g => g.Options)
@@ -56,7 +66,7 @@ public class AppDbContext : DbContext
                      .OnDelete(DeleteBehavior.NoAction);
           });
 
-          // Vote configuration - FIX HERE
+          // Vote configuration
           modelBuilder.Entity<Vote>(entity =>
           {
                entity.HasKey(v => v.Id);
@@ -64,14 +74,15 @@ public class AppDbContext : DbContext
                entity.HasOne(v => v.Poll)
                      .WithMany(p => p.Votes)
                      .HasForeignKey(v => v.PollId)
-                     .OnDelete(DeleteBehavior.NoAction);  // Changed from Cascade to NoAction
+                     .OnDelete(DeleteBehavior.NoAction);
 
                entity.HasOne(v => v.PollOption)
                      .WithMany()
                      .HasForeignKey(v => v.PollOptionId)
-                     .OnDelete(DeleteBehavior.NoAction);  // Changed from Cascade to NoAction
+                     .OnDelete(DeleteBehavior.NoAction);
           });
 
+          // PollOptionGroup configuration
           modelBuilder.Entity<PollOptionGroup>(entity =>
           {
                entity.HasKey(g => g.Id);
@@ -82,6 +93,5 @@ public class AppDbContext : DbContext
                      .HasForeignKey(g => g.PollId)
                      .OnDelete(DeleteBehavior.Cascade);
           });
-
      }
 }
