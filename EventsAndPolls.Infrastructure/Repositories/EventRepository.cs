@@ -16,7 +16,9 @@ public class EventRepository : IEventRepository
 
      public async Task<Event?> GetByIdAsync(int id)
      {
-          return await _context.Events.FindAsync(id);
+          return await _context.Events
+              .Include(e => e.Polls)
+              .FirstOrDefaultAsync(e => e.Id == id);
      }
 
      public async Task<IEnumerable<Event>> GetAllAsync()
@@ -49,7 +51,8 @@ public class EventRepository : IEventRepository
      public async Task<IEnumerable<Event>> GetUpcomingEventsAsync()
      {
           return await _context.Events
-              .Where(e => e.StartDate > DateTime.UtcNow && e.IsActive)
+              .Include(e => e.Polls)
+              .Where(e => e.EndDate > DateTime.UtcNow && e.IsActive)
               .OrderBy(e => e.StartDate)
               .ToListAsync();
      }

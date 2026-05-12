@@ -1,4 +1,5 @@
 ﻿using EventsAndPolls.Domain.Entities;
+using Microsoft.Extensions.Options;
 
 namespace EventsAndPolls.Domain.Entities;
 
@@ -63,6 +64,28 @@ public class Poll : BaseEntity
           }
 
           return clonedPoll;
+     }
+
+     public void SetClosesAt(DateTime? closesAt)
+     {
+          ClosesAt = closesAt;
+     }
+
+     public void Reactivate()
+     {
+          IsActive = true;
+     }
+
+     public void Deactivate()
+     {
+          IsActive = false;
+     }
+
+     public void RemoveOption(int optionId)
+     {
+          var option = Options.FirstOrDefault(o => o.Id == optionId);
+          if (option != null)
+               ((List<PollOption>)Options).Remove(option);
      }
 
      public static Poll Create(string question, int eventId, DateTime? closesAt = null, bool allowMultipleChoices = false)

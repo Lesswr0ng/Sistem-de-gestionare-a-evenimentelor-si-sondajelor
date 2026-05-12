@@ -6,8 +6,9 @@ namespace EventsAndPolls.Application.Services;
 public interface IEventService
 {
      Task<EventDto> CreateEventAsync(CreateEventDto createDto, string organizerId);
-     Task<EventDto> UpdateEventAsync(UpdateEventDto updateDto);
+     Task<EventDto?> UpdateEventAsync(int id, UpdateEventDto updateDto, string organizerId);
      Task<EventDto?> GetEventByIdAsync(int id);
      Task<IEnumerable<EventDto>> GetUpcomingEventsAsync();
-     Task DeleteEventAsync(int id);
+     Task<IEnumerable<EventDto>> GetAllEventsAsync();
+     Task DeleteEventAsync(int id, string organizerId);
 }

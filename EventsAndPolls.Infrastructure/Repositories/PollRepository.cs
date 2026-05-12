@@ -43,12 +43,18 @@ public class PollRepository : IPollRepository
 
      public async Task DeleteAsync(int id)
      {
-          var entity = await GetByIdAsync(id);
-          if (entity != null)
-          {
-               _context.Polls.Remove(entity);
-               await _context.SaveChangesAsync();
-          }
+          var poll = await _context.Polls
+              .Include(p => p.Options)
+              .FirstOrDefaultAsync(p => p.Id == id);
+
+          if (poll == null)
+               return;
+
+          _context.PollOptions.RemoveRange(poll.Options);
+
+          _context.Polls.Remove(poll);
+
+          await _context.SaveChangesAsync();
      }
 
      public async Task<IEnumerable<Poll>> GetPollsByEventAsync(int eventId)

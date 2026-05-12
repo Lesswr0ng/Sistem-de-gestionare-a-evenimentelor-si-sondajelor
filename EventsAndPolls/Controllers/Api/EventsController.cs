@@ -102,7 +102,7 @@ public class EventsController : ControllerBase
                if (id != updateDto.Id)
                     return BadRequest(new { error = "ID mismatch" });
             var organizerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            var updated = await _eventService.UpdateEventAsync(updateDto);
+            var updated = await _eventService.UpdateEventAsync(id, updateDto, organizerId);
             if (updated == null) return NotFound(new { error = $"Event {id} not found or not yours" });
             return Ok(updated);
         }
@@ -120,7 +120,7 @@ public class EventsController : ControllerBase
         try
         {
             var organizerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-            await _eventService.DeleteEventAsync(id);
+            await _eventService.DeleteEventAsync(id, organizerId);
             return NoContent();
         }
         catch (Exception ex)

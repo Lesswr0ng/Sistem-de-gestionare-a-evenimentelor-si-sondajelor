@@ -71,6 +71,11 @@
           @if (isOrganizer)
           {
                <div class="mt-3">
+                    <a id="editPollBtn" asp-page="/Polls/Edit"
+                       asp-route-id="@pollId"
+                       class="btn btn-outline-warning">
+                         ✏️ Editează Sondaj
+                    </a>
                     <button type="button" class="btn btn-outline-info"
                             data-bs-toggle="modal" data-bs-target="#cloneModal">
                          📋 Clonează Sondaj

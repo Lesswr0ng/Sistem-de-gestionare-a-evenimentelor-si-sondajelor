@@ -1,5 +1,6 @@
 ﻿using EventsAndPolls.Application.DTOs.Requests;
 using EventsAndPolls.Application.DTOs.Responses;
+using EventsAndPolls.Application.Observer;
 using EventsAndPolls.Domain.Entities;
 using EventsAndPolls.Domain.Interfaces;
 
@@ -10,40 +11,76 @@ public class PollService : IPollService
      private readonly IPollRepository _pollRepository;
      private readonly IVoteRepository _voteRepository;
      private readonly IEventRepository _eventRepository;
+     private readonly IPollEventPublisher? _publisher;
 
-     public PollService(IPollRepository pollRepository, IVoteRepository voteRepository, IEventRepository eventRepository)
+
+     public PollService(
+         IPollRepository pollRepository,
+         IVoteRepository voteRepository,
+         IEventRepository eventRepository,
+         IPollEventPublisher? publisher = null)
      {
           _pollRepository = pollRepository;
           _voteRepository = voteRepository;
           _eventRepository = eventRepository;
+          _publisher = publisher;
      }
 
      public async Task<PollDto> CreatePollAsync(CreatePollDto createDto)
      {
-          //factory method implementation
-          /*
-          PollCreator creator = createDto.AllowMultipleChoices
-              ? new MultipleChoicePollCreator()
-              : new SingleChoicePollCreator();
-
-          var poll = creator.CreateAndSetupPoll(
-              createDto.Question,
-              createDto.EventId,
-              createDto.Options) as Poll;
-
-          if (poll == null)
-               throw new Exception("Failed to create poll");
-
-          await _pollRepository.AddAsync(poll);
-
-          return MapToDto(poll);*/
-          
           var poll = Poll.CreateBuilder(createDto.Question, createDto.EventId)
               .WithOptions(createDto.Options)
               .AllowMultipleSelections(createDto.AllowMultipleChoices)
               .Build();
 
           await _pollRepository.AddAsync(poll);
+
+          if (_publisher != null)
+               await _publisher.NotifyPollCreatedAsync(new PollCreatedEvent(
+                   poll.Id, poll.Question, poll.EventId, poll.CreatedAt));
+
+          return MapToDto(poll);
+     }
+
+     public async Task<PollDto> UpdatePollAsync(UpdatePollDto updateDto)
+     {
+          var poll = await _pollRepository.GetByIdAsync(updateDto.Id);
+          if (poll == null)
+               throw new ArgumentException($"Poll {updateDto.Id} not found");
+
+          // ── Safe field updates ────────────────────────────────────────────
+          poll.SetQuestion(updateDto.Question);
+          poll.SetClosesAt(updateDto.ClosesAt);
+
+          if (updateDto.IsActive != poll.IsActive)
+          {
+               if (!updateDto.IsActive) poll.Deactivate();
+               else poll.Reactivate();
+          }
+
+          // ── Delete options — only those with zero votes ───────────────────
+          if (updateDto.OptionIdsToDelete.Any())
+          {
+               foreach (var optionId in updateDto.OptionIdsToDelete)
+               {
+                    var voteCount = poll.Votes?.Count(v => v.PollOptionId == optionId) ?? 0;
+                    if (voteCount > 0)
+                         throw new InvalidOperationException(
+                             $"Cannot delete option {optionId} — it has {voteCount} vote(s). " +
+                             "Only options with 0 votes can be deleted.");
+
+                    poll.RemoveOption(optionId);
+               }
+          }
+
+          // ── Add new options ────────────────────────────────────────────────
+          foreach (var optionText in updateDto.OptionsToAdd)
+          {
+               if (!string.IsNullOrWhiteSpace(optionText))
+                    poll.AddOption(optionText);
+          }
+
+          await _pollRepository.UpdateAsync(poll);
           return MapToDto(poll);
      }
 
@@ -69,6 +106,13 @@ public class PollService : IPollService
 
           var totalVotes = await _voteRepository.GetVoteCountAsync(voteDto.PollId);
 
+          if (_publisher != null)
+          {
+               foreach (var optionId in voteDto.SelectedOptionIds)
+                    await _publisher.NotifyVoteCastAsync(new VoteCastEvent(
+                        voteDto.PollId, optionId, userId, totalVotes, DateTime.UtcNow));
+          }
+
           return new VoteResultDto
           {
                Success = true,
@@ -83,21 +127,55 @@ public class PollService : IPollService
      {
           var poll = await _pollRepository.GetByIdAsync(pollId);
           if (poll == null)
-               throw new ArgumentException($"Poll with ID {pollId} not found");
-
+               throw new ArgumentException($"Poll {pollId} not found");
           return MapToDto(poll);
      }
 
      public async Task DeletePollAsync(int id)
      {
+          var poll = await _pollRepository.GetByIdAsync(id);
           await _pollRepository.DeleteAsync(id);
+
+          if (_publisher != null && poll != null && poll.IsActive)
+          {
+               var totalVotes = await _voteRepository.GetVoteCountAsync(id);
+               await _publisher.NotifyPollClosedAsync(new PollClosedEvent(
+                   id, poll.Question, totalVotes, DateTime.UtcNow));
+          }
      }
 
-     // Mapping method
+     public async Task<PollDto> ClonePollAsync(ClonePollDto cloneDto)
+     {
+          var sourcePoll = await _pollRepository.GetByIdAsync(cloneDto.SourcePollId);
+          if (sourcePoll == null)
+               throw new Exception("Sondaj sursă negăsit");
+
+          Poll clonedPoll = cloneDto.DeepClone
+              ? sourcePoll.DeepClone()
+              : sourcePoll.Clone();
+
+          if (cloneDto.TargetEventId.HasValue)
+          {
+               var targetEvent = await _eventRepository.GetByIdAsync(cloneDto.TargetEventId.Value);
+               if (targetEvent == null) throw new Exception("Eveniment țintă negăsit");
+               clonedPoll.SetEventId(cloneDto.TargetEventId.Value);
+          }
+
+          if (!string.IsNullOrWhiteSpace(cloneDto.NewQuestion))
+               clonedPoll.SetQuestion(cloneDto.NewQuestion);
+
+          await _pollRepository.AddAsync(clonedPoll);
+
+          if (_publisher != null)
+               await _publisher.NotifyPollCreatedAsync(new PollCreatedEvent(
+                   clonedPoll.Id, clonedPoll.Question, clonedPoll.EventId, clonedPoll.CreatedAt));
+
+          return MapToDto(clonedPoll);
+     }
+
      private PollDto MapToDto(Poll poll)
      {
           var totalVotes = poll.Votes?.Count ?? 0;
-
           return new PollDto
           {
                Id = poll.Id,
@@ -114,36 +192,10 @@ public class PollService : IPollService
                     Text = o.Text,
                     VoteCount = poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0,
                     Percentage = totalVotes > 0
-                        ? (decimal)Math.Round((poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0) * 100.0 / totalVotes, 2)
-                        : 0
-               }).ToList() ?? new List<PollOptionDto>()
+                       ? (decimal)Math.Round(
+                           (poll.Votes?.Count(v => v.PollOptionId == o.Id) ?? 0) * 100.0 / totalVotes, 2)
+                       : 0
+               }).ToList() ?? new()
           };
-     }
-     public async Task<PollDto> ClonePollAsync(ClonePollDto cloneDto)
-     {
-          var sourcePoll = await _pollRepository.GetByIdAsync(cloneDto.SourcePollId);
-          if (sourcePoll == null)
-               throw new Exception("Sondaj sursă negăsit");
-
-          Poll clonedPoll = cloneDto.DeepClone
-              ? sourcePoll.DeepClone()
-              : sourcePoll.Clone();
-
-          if (cloneDto.TargetEventId.HasValue)
-          {
-               var targetEvent = await _eventRepository.GetByIdAsync(cloneDto.TargetEventId.Value);
-               if (targetEvent == null)
-                    throw new Exception("Eveniment țintă negăsit");
-
-               clonedPoll.SetEventId(cloneDto.TargetEventId.Value);
-          }
-
-          if (!string.IsNullOrWhiteSpace(cloneDto.NewQuestion))
-          {
-               clonedPoll.SetQuestion(cloneDto.NewQuestion);
-          }
-
-          await _pollRepository.AddAsync(clonedPoll);
-          return MapToDto(clonedPoll);
      }
 }

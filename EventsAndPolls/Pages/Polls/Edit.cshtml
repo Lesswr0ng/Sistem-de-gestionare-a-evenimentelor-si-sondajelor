@@ -1,0 +1,263 @@
+﻿@page
+@{
+     Layout = "_Layout";
+     ViewData["Title"] = "Editează Sondaj";
+     var pollId = Request.Query["id"];
+}
+
+<div class="container mt-4">
+     <h1>Editează Sondaj</h1>
+
+     <div id="loadingSpinner" class="text-center">
+          <div class="spinner-border text-primary" role="status"></div>
+     </div>
+
+     <div id="editForm" style="display:none;">
+          <div class="card mb-4">
+               <div class="card-header"><h5>Detalii sondaj</h5></div>
+               <div class="card-body">
+                    <div class="mb-3">
+                         <label class="form-label">Întrebare</label>
+                         <input type="text" id="question" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                         <label class="form-label">Se închide la (opțional)</label>
+                         <input type="datetime-local" id="closesAt" class="form-control" />
+                    </div>
+                    <div class="form-check mb-3">
+                         <input type="checkbox" id="isActive" class="form-check-input" />
+                         <label class="form-check-label" for="isActive">Sondaj activ</label>
+                    </div>
+
+                    @* AllowMultipleChoices is read-only if there are votes *@
+                    <div class="mb-3">
+                         <label class="form-label">Tip sondaj</label>
+                         <div id="multipleChoiceInfo" class="form-control-plaintext text-muted"></div>
+                    </div>
+               </div>
+          </div>
+
+          <div class="card mb-4">
+               <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Opțiuni</h5>
+                    <small class="text-muted">Opțiunile cu voturi nu pot fi șterse</small>
+               </div>
+               <div class="card-body">
+                    <div id="optionsList"></div>
+
+                    <div class="mt-3 border-top pt-3">
+                         <label class="form-label fw-bold">Adaugă opțiuni noi</label>
+                         <div id="newOptionsList">
+                              <div class="input-group mb-2">
+                                   <input type="text" class="form-control new-option-input"
+                                          placeholder="Text opțiune nouă" />
+                                   <button class="btn btn-outline-danger remove-new-option" type="button">✕</button>
+                              </div>
+                         </div>
+                         <button id="addOptionBtn" class="btn btn-outline-secondary btn-sm mt-1">
+                              + Adaugă câmp
+                         </button>
+                    </div>
+               </div>
+          </div>
+
+          <div id="errorMsg" class="alert alert-danger" style="display:none;"></div>
+          <div id="successMsg" class="alert alert-success" style="display:none;"></div>
+
+          <div class="d-flex gap-2 mb-4">
+               <button id="saveBtn" class="btn btn-primary">💾 Salvează modificările</button>
+               <button id="deleteBtn" class="btn btn-danger">🗑️ Șterge sondajul</button>
+               <a id="cancelBtn" href="#" class="btn btn-secondary">Anulează</a>
+          </div>
+     </div>
+</div>
+
+@section Scripts {
+     <script>
+          const pollId = '@pollId';
+          const optionsToDelete = new Set(); // IDs of options marked for deletion
+
+          document.getElementById('cancelBtn').href = `/Polls/Details?id=${pollId}`;
+
+          function toLocalInput(dateStr) {
+              if (!dateStr) return '';
+              const d = new Date(dateStr);
+              const offset = d.getTimezoneOffset() * 60000;
+              return new Date(d - offset).toISOString().slice(0, 16);
+          }
+
+          async function loadPoll() {
+              try {
+                  const res = await fetch(`/api/polls/${pollId}/results`);
+                  if (!res.ok) throw new Error('Sondaj negăsit');
+                  const poll = await res.json();
+
+                  document.getElementById('question').value  = poll.question;
+                  document.getElementById('isActive').checked = poll.isActive;
+                  document.getElementById('closesAt').value  = toLocalInput(poll.closesAt);
+
+                  // Show AllowMultipleChoices as read-only info
+                  const multiInfo = document.getElementById('multipleChoiceInfo');
+                  multiInfo.textContent = poll.allowMultipleChoices
+                      ? '☑️ Multiple Choice (nu poate fi schimbat după creare)'
+                      : '🔘 Single Choice (nu poate fi schimbat după creare)';
+
+                  renderOptions(poll.options, poll.totalVotes);
+
+                  document.getElementById('loadingSpinner').style.display = 'none';
+                  document.getElementById('editForm').style.display       = 'block';
+              } catch (err) {
+                  document.getElementById('loadingSpinner').innerHTML =
+                      `<div class="alert alert-danger">${err.message}</div>`;
+              }
+          }
+
+          function renderOptions(options, totalVotes) {
+              const container = document.getElementById('optionsList');
+              if (!options.length) {
+                  container.innerHTML = '<p class="text-muted">Nu există opțiuni.</p>';
+                  return;
+              }
+
+              container.innerHTML = options.map(option => {
+                  const hasVotes = option.voteCount > 0;
+                  const isMarked = optionsToDelete.has(option.id);
+
+                  return `
+                      <div class="d-flex align-items-center gap-2 mb-2 p-2 rounded border
+                                  ${isMarked ? 'bg-danger bg-opacity-10 border-danger' : ''}"
+                           id="option-row-${option.id}">
+                          <span class="flex-grow-1 ${isMarked ? 'text-decoration-line-through text-muted' : ''}">
+                              ${option.text}
+                          </span>
+                          <span class="badge ${option.voteCount > 0 ? 'bg-primary' : 'bg-secondary'}">
+                              ${option.voteCount} voturi
+                          </span>
+                          ${hasVotes
+                              ? `<button class="btn btn-sm btn-outline-secondary" disabled
+                                         title="Nu poți șterge o opțiune cu voturi">
+                                     🔒
+                                 </button>`
+                              : isMarked
+                                  ? `<button class="btn btn-sm btn-outline-success"
+                                             onclick="unmarkDelete(${option.id})">
+                                         ↩ Anulează
+                                     </button>`
+                                  : `<button class="btn btn-sm btn-outline-danger"
+                                             onclick="markDelete(${option.id}, '${option.text.replace(/'/g, "\\'")}')">
+                                         ✕ Șterge
+                                     </button>`
+                          }
+                      </div>
+                  `;
+              }).join('');
+          }
+
+          function markDelete(optionId, optionText) {
+              if (!confirm(`Ești sigur că vrei să ștergi opțiunea "${optionText}"?`)) return;
+              optionsToDelete.add(optionId);
+              // Re-render just that row
+              const row = document.getElementById(`option-row-${optionId}`);
+              if (row) {
+                  row.classList.add('bg-danger', 'bg-opacity-10', 'border-danger');
+                  row.querySelector('span').classList.add('text-decoration-line-through', 'text-muted');
+                  row.querySelector('button').outerHTML =
+                      `<button class="btn btn-sm btn-outline-success"
+                               onclick="unmarkDelete(${optionId})">
+                          ↩ Anulează
+                      </button>`;
+              }
+          }
+
+          function unmarkDelete(optionId) {
+              optionsToDelete.delete(optionId);
+              loadPoll(); // re-render the whole options list cleanly
+          }
+
+          // Add new option field
+          document.getElementById('addOptionBtn').addEventListener('click', () => {
+              const list = document.getElementById('newOptionsList');
+              const div  = document.createElement('div');
+              div.className = 'input-group mb-2';
+              div.innerHTML = `
+                  <input type="text" class="form-control new-option-input"
+                         placeholder="Text opțiune nouă"/>
+                  <button class="btn btn-outline-danger remove-new-option" type="button">✕</button>
+              `;
+              list.appendChild(div);
+              div.querySelector('.remove-new-option').addEventListener('click', () => div.remove());
+          });
+
+          // Remove new option field
+          document.querySelector('.remove-new-option').addEventListener('click', function() {
+              // Only remove if there's more than one input
+              const inputs = document.querySelectorAll('.new-option-input');
+              if (inputs.length > 1) this.closest('.input-group').remove();
+              else this.closest('.input-group').querySelector('input').value = '';
+          });
+
+          // Save
+          document.getElementById('saveBtn').addEventListener('click', async () => {
+              const errorDiv   = document.getElementById('errorMsg');
+              const successDiv = document.getElementById('successMsg');
+              errorDiv.style.display = successDiv.style.display = 'none';
+
+              const newOptions = [...document.querySelectorAll('.new-option-input')]
+                  .map(i => i.value.trim())
+                  .filter(v => v.length > 0);
+
+              const payload = {
+                  id:              parseInt(pollId),
+                  question:        document.getElementById('question').value,
+                  closesAt:        document.getElementById('closesAt').value
+                                      ? new Date(document.getElementById('closesAt').value).toISOString()
+                                      : null,
+                  isActive:        document.getElementById('isActive').checked,
+                  optionsToAdd:    newOptions,
+                  optionIdsToDelete: [...optionsToDelete]
+              };
+
+              try {
+                  const res = await fetch(`/api/polls/${pollId}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload)
+                  });
+
+                  if (res.ok) {
+                      successDiv.textContent  = 'Sondaj actualizat cu succes!';
+                      successDiv.style.display = 'block';
+                      optionsToDelete.clear();
+                      setTimeout(() => window.location.href = `/Polls/Details?id=${pollId}`, 1000);
+                  } else {
+                      const err = await res.json();
+                      errorDiv.textContent   = err.error || 'Eroare la salvare';
+                      errorDiv.style.display = 'block';
+                  }
+              } catch {
+                  errorDiv.textContent   = 'Eroare de rețea';
+                  errorDiv.style.display = 'block';
+              }
+          });
+
+          // Delete poll
+          document.getElementById('deleteBtn').addEventListener('click', async () => {
+              if (!confirm('Ești sigur că vrei să ștergi acest sondaj? Toate voturile vor fi șterse.'))
+                  return;
+
+              try {
+                  const res = await fetch(`/api/polls/${pollId}`, { method: 'DELETE' });
+                  if (res.ok) {
+                      alert('Sondaj șters.');
+                      history.back();
+                  } else {
+                      alert('Eroare la ștergere');
+                  }
+              } catch {
+                  alert('Eroare de rețea');
+              }
+          });
+
+          loadPoll();
+     </script>
+}

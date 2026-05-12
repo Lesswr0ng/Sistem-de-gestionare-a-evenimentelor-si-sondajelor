@@ -1,0 +1,127 @@
+﻿@page "{id}"
+@{
+     Layout = "_Layout";
+     ViewData["Title"] = "Editează Eveniment";
+}
+
+<div class="container mt-4">
+     <h1>Editează Eveniment</h1>
+
+     <div id="loadingSpinner" class="text-center">
+          <div class="spinner-border text-primary" role="status"></div>
+     </div>
+
+     <div id="editForm" style="display:none;">
+          <div class="card">
+               <div class="card-body">
+                    <div class="mb-3">
+                         <label class="form-label">Titlu</label>
+                         <input type="text" id="title" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                         <label class="form-label">Descriere</label>
+                         <textarea id="description" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                         <div class="col-md-6 mb-3">
+                              <label class="form-label">Data început</label>
+                              <input type="datetime-local" id="startDate" class="form-control" />
+                         </div>
+                         <div class="col-md-6 mb-3">
+                              <label class="form-label">Data sfârșit</label>
+                              <input type="datetime-local" id="endDate" class="form-control" />
+                         </div>
+                    </div>
+                    <div class="mb-3">
+                         <label class="form-label">Locație</label>
+                         <input type="text" id="location" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                         <label class="form-label">Max participanți</label>
+                         <input type="number" id="maxParticipants" class="form-control" min="1" />
+                    </div>
+
+                    <div id="errorMsg" class="alert alert-danger" style="display:none;"></div>
+
+                    <div class="d-flex gap-2">
+                         <button id="saveBtn" class="btn btn-primary">💾 Salvează</button>
+                         <a id="cancelBtn" href="#" class="btn btn-secondary">Anulează</a>
+                    </div>
+               </div>
+          </div>
+     </div>
+</div>
+
+@section Scripts {
+     <script>
+          const pathParts = window.location.pathname.split('/');
+          const eventId = pathParts[pathParts.length - 1];
+
+          document.getElementById('cancelBtn').href = `/Events/Details/${eventId}`;
+
+          // Format date for datetime-local input
+          function toLocalInput(dateStr) {
+              const d = new Date(dateStr);
+              // Offset for local time
+              const offset = d.getTimezoneOffset() * 60000;
+              return new Date(d - offset).toISOString().slice(0, 16);
+          }
+
+          async function loadEvent() {
+              try {
+                  const res = await fetch(`/api/events/${eventId}`);
+                  if (!res.ok) throw new Error('Event not found');
+                  const event = await res.json();
+
+                  document.getElementById('title').value          = event.title;
+                  document.getElementById('description').value    = event.description;
+                  document.getElementById('startDate').value      = toLocalInput(event.startDate);
+                  document.getElementById('endDate').value        = toLocalInput(event.endDate);
+                  document.getElementById('location').value       = event.location;
+                  document.getElementById('maxParticipants').value = event.maxParticipants;
+
+                  document.getElementById('loadingSpinner').style.display = 'none';
+                  document.getElementById('editForm').style.display       = 'block';
+              } catch (err) {
+                  document.getElementById('loadingSpinner').innerHTML =
+                      `<div class="alert alert-danger">${err.message}</div>`;
+              }
+          }
+
+          document.getElementById('saveBtn').addEventListener('click', async () => {
+              const errorDiv = document.getElementById('errorMsg');
+              errorDiv.style.display = 'none';
+
+              const payload = {
+                  id:              parseInt(eventId),
+                  title:           document.getElementById('title').value,
+                  description:     document.getElementById('description').value,
+                  startDate:       new Date(document.getElementById('startDate').value).toISOString(),
+                  endDate:         new Date(document.getElementById('endDate').value).toISOString(),
+                  location:        document.getElementById('location').value,
+                  maxParticipants: parseInt(document.getElementById('maxParticipants').value)
+              };
+
+              try {
+                  const res = await fetch(`/api/events/${eventId}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload)
+                  });
+
+                  if (res.ok) {
+                      window.location.href = `/Events/Details/${eventId}`;
+                  } else {
+                      const err = await res.json();
+                      errorDiv.textContent    = err.error || 'Eroare la salvare';
+                      errorDiv.style.display  = 'block';
+                  }
+              } catch {
+                  errorDiv.textContent   = 'Eroare de rețea';
+                  errorDiv.style.display = 'block';
+              }
+          });
+
+          loadEvent();
+     </script>
+}

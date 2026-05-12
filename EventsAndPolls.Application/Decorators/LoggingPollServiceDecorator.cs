@@ -65,6 +65,17 @@ public class LoggingPollServiceDecorator : IPollService
           return result;
      }
 
+     public async Task<PollDto> UpdatePollAsync(UpdatePollDto dto)
+     {
+          _logger.LogInformation("[Decorator:Logging] UpdatePollAsync called — PollId: {PollId}, Question: {Question}",
+              dto.Id, dto.Question);
+
+          var result = await _inner.UpdatePollAsync(dto);
+
+          _logger.LogInformation("[Decorator:Logging] UpdatePollAsync completed — PollId: {PollId}", result.Id);
+          return result;
+     }
+
      public async Task<PollDto> GetPollResultsAsync(int pollId)
      {
           _logger.LogInformation("[Decorator:Logging] GetPollResultsAsync called — PollId: {PollId}", pollId);

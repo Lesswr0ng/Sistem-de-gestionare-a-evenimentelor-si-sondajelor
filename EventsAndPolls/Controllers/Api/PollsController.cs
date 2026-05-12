@@ -1,4 +1,5 @@
-﻿using EventsAndPolls.Application.DTOs.Requests;
+﻿using EventsAndPolls.Application.Command;
+using EventsAndPolls.Application.DTOs.Requests;
 using EventsAndPolls.Application.Services;
 using EventsAndPolls.Domain.Composite;
 using EventsAndPolls.Domain.Interfaces;
@@ -15,10 +16,14 @@ public class PollsController : ControllerBase
      private readonly IPollService _pollService;
      private readonly IPollRepository _pollRepository;
      private readonly ILogger<PollsController> _logger;
+     private readonly PollCommandInvoker _invoker;
+     private readonly ILoggerFactory _loggerFactory;
 
      public PollsController(
          IPollService pollService,
          IPollRepository pollRepository,
+         PollCommandInvoker invoker,
+         ILoggerFactory loggerFactory,
          ILogger<PollsController> logger)
      {
           _pollService = pollService;
@@ -26,7 +31,6 @@ public class PollsController : ControllerBase
           _logger = logger;
      }
 
-     // Public — anyone can view polls
      [HttpGet("{id}")]
      public async Task<IActionResult> GetPoll(int id)
      {
@@ -65,10 +69,8 @@ public class PollsController : ControllerBase
           {
                var poll = await _pollRepository.GetByIdAsync(id);
                if (poll == null) return NotFound(new { error = $"Poll {id} not found" });
-
                var tree = PollTreeBuilder.BuildTree(poll);
-               var result = BuildTreeJson(tree);
-               return Ok(result);
+               return Ok(BuildTreeJson(tree));
           }
           catch (Exception ex)
           {
@@ -77,19 +79,75 @@ public class PollsController : ControllerBase
           }
      }
 
-     // Organizer only
      [HttpPost]
      [Authorize(Roles = Roles.Organizer)]
      public async Task<IActionResult> CreatePoll([FromBody] CreatePollDto dto)
      {
           try
           {
-               var poll = await _pollService.CreatePollAsync(dto);
-               return CreatedAtAction(nameof(GetPoll), new { id = poll.Id }, poll);
+               var cmd = new CreatePollCommand(
+                   _pollService, dto,
+                   _loggerFactory.CreateLogger<CreatePollCommand>());
+
+               await _invoker.ExecuteAsync(cmd);
+
+               return CreatedAtAction(nameof(GetPoll), new { id = cmd.Result!.Id }, cmd.Result);
           }
           catch (Exception ex)
           {
                _logger.LogError(ex, "Error creating poll");
+               return StatusCode(500, new { error = "An error occurred" });
+          }
+     }
+
+     [HttpPut("{id}")]
+     [Authorize(Roles = Roles.Organizer)]
+     public async Task<IActionResult> UpdatePoll(int id, [FromBody] UpdatePollDto dto)
+     {
+          try
+          {
+               dto.Id = id;
+               var poll = await _pollService.UpdatePollAsync(dto);
+               return Ok(poll);
+          }
+          catch (ArgumentException ex)
+          {
+               return NotFound(new { error = ex.Message });
+          }
+          catch (InvalidOperationException ex)
+          {
+               // Integrity violation — e.g. trying to delete option with votes
+               return BadRequest(new { error = ex.Message });
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error updating poll {PollId}", id);
+               return StatusCode(500, new { error = "An error occurred" });
+          }
+     }
+
+     // Command: DeletePoll — snapshots then deletes; undo recreates it
+     [HttpDelete("{id}")]
+     [Authorize(Roles = Roles.Organizer)]
+     public async Task<IActionResult> DeletePoll(int id)
+     {
+          try
+          {
+               var cmd = new DeletePollCommand(
+                   _pollService, id,
+                   _loggerFactory.CreateLogger<DeletePollCommand>());
+
+               await _invoker.ExecuteAsync(cmd);
+
+               return NoContent();
+          }
+          catch (ArgumentException ex)
+          {
+               return NotFound(new { error = ex.Message });
+          }
+          catch (Exception ex)
+          {
+               _logger.LogError(ex, "Error deleting poll {PollId}", id);
                return StatusCode(500, new { error = "An error occurred" });
           }
      }
@@ -100,8 +158,13 @@ public class PollsController : ControllerBase
      {
           try
           {
-               var poll = await _pollService.ClonePollAsync(dto);
-               return Ok(poll);
+               var cmd = new ClonePollCommand(
+                   _pollService, dto,
+                   _loggerFactory.CreateLogger<ClonePollCommand>());
+
+               await _invoker.ExecuteAsync(cmd);
+
+               return Ok(cmd.Result);
           }
           catch (Exception ex)
           {
@@ -110,30 +173,49 @@ public class PollsController : ControllerBase
           }
      }
 
-     [HttpDelete("{id}")]
+     // Undo the last command — testable via Swagger
+     [HttpPost("undo")]
      [Authorize(Roles = Roles.Organizer)]
-     public async Task<IActionResult> DeletePoll(int id)
+     public async Task<IActionResult> Undo()
      {
           try
           {
-               await _pollService.DeletePollAsync(id);
-               return NoContent();
+               if (_invoker.HistoryDepth == 0)
+                    return BadRequest(new { error = "Nothing to undo" });
+
+               var before = _invoker.HistoryDepth;
+               await _invoker.UndoLastAsync();
+
+               return Ok(new
+               {
+                    message = "Last action undone",
+                    historyDepth = _invoker.HistoryDepth
+               });
           }
           catch (Exception ex)
           {
-               _logger.LogError(ex, "Error deleting poll {PollId}", id);
+               _logger.LogError(ex, "Error during undo");
                return StatusCode(500, new { error = "An error occurred" });
           }
      }
 
-     // Any authenticated user can vote
+     [HttpGet("undo/history")]
+     [Authorize(Roles = Roles.Organizer)]
+     public IActionResult GetUndoHistory()
+     {
+          return Ok(new
+          {
+               historyDepth = _invoker.HistoryDepth,
+               commands = _invoker.HistoryNames
+          });
+     }
+
      [HttpPost("{id}/votes")]
      [Authorize]
      public async Task<IActionResult> CastVote(int id, [FromBody] CastVoteDto dto)
      {
           try
           {
-               // Real userId from authenticated user — no more "anonymous-user"
                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                if (string.IsNullOrEmpty(userId))
                     return Unauthorized(new { error = "You must be logged in to vote" });
@@ -156,7 +238,6 @@ public class PollsController : ControllerBase
      private object BuildTreeJson(IPollComponent node)
      {
           if (node is PollOptionGroup group)
-          {
                return new
                {
                     type = "group",
@@ -164,7 +245,6 @@ public class PollsController : ControllerBase
                     text = group.DisplayText,
                     children = group.Children.Select(BuildTreeJson).ToList()
                };
-          }
           return new { type = "option", id = node.Id, text = node.DisplayText };
      }
 }

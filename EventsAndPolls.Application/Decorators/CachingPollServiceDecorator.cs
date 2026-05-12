@@ -46,6 +46,18 @@ public class CachingPollServiceDecorator : IPollService
           return result;
      }
 
+     public async Task<PollDto> UpdatePollAsync(UpdatePollDto dto)
+     {
+          var result = await _inner.UpdatePollAsync(dto);
+
+          // Invalidate cache for this poll and its event's list
+          _cache.Remove(PollCacheKey(dto.Id));
+          _cache.Remove(EventPollsCacheKey(result.EventId));
+          _logger.LogInformation("[Decorator:Cache] INVALIDATED — poll {PollId} after update", dto.Id);
+
+          return result;
+     }
+
      public async Task<IEnumerable<PollDto>> GetPollsByEventAsync(int eventId)
      {
           var key = EventPollsCacheKey(eventId);

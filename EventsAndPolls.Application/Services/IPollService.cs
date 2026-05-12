@@ -13,4 +13,5 @@ public interface IPollService
      Task<PollDto> GetPollResultsAsync(int pollId);
      Task DeletePollAsync(int id);
      Task<PollDto> ClonePollAsync(ClonePollDto cloneDto);
+     Task<PollDto> UpdatePollAsync(UpdatePollDto updateDto);
 }

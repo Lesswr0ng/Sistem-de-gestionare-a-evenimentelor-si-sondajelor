@@ -16,14 +16,9 @@ public class EventService : IEventService
 
      public async Task<EventDto> CreateEventAsync(CreateEventDto createDto, string organizerId)
      {
-          // Validate dates
           if (createDto.StartDate >= createDto.EndDate)
                throw new ArgumentException("Start date must be before end date");
 
-          if (createDto.StartDate < DateTime.UtcNow)
-               throw new ArgumentException("Start date cannot be in the past");
-
-          // Create domain entity
           var @event = Event.Create(
               createDto.Title,
               createDto.Description,
@@ -33,20 +28,19 @@ public class EventService : IEventService
               createDto.MaxParticipants,
               organizerId);
 
-          // Save
           await _eventRepository.AddAsync(@event);
-
-          // Return DTO
           return MapToDto(@event);
      }
 
-     public async Task<EventDto> UpdateEventAsync(UpdateEventDto updateDto)
+     public async Task<EventDto?> UpdateEventAsync(int id, UpdateEventDto updateDto, string organizerId)
      {
-          var @event = await _eventRepository.GetByIdAsync(updateDto.Id);
-          if (@event == null)
-               throw new ArgumentException($"Event with ID {updateDto.Id} not found");
+          var @event = await _eventRepository.GetByIdAsync(id);
+          if (@event == null) return null;
 
-          // Validate dates
+          // Only the organizer who created it can update it
+          if (@event.OrganizerId != organizerId)
+               throw new UnauthorizedAccessException("You can only edit your own events");
+
           if (updateDto.StartDate >= updateDto.EndDate)
                throw new ArgumentException("Start date must be before end date");
 
@@ -59,7 +53,6 @@ public class EventService : IEventService
               updateDto.MaxParticipants);
 
           await _eventRepository.UpdateAsync(@event);
-
           return MapToDto(@event);
      }
 
@@ -75,26 +68,35 @@ public class EventService : IEventService
           return events.Select(MapToDto);
      }
 
-     public async Task DeleteEventAsync(int id)
+     public async Task<IEnumerable<EventDto>> GetAllEventsAsync()
      {
+          var events = await _eventRepository.GetAllAsync();
+          return events.Select(MapToDto);
+     }
+
+     public async Task DeleteEventAsync(int id, string organizerId)
+     {
+          var @event = await _eventRepository.GetByIdAsync(id);
+          if (@event == null) return;
+
+          if (@event.OrganizerId != organizerId)
+               throw new UnauthorizedAccessException("You can only delete your own events");
+
           await _eventRepository.DeleteAsync(id);
      }
 
-     // Mapping method (in real app, use AutoMapper)
-     private EventDto MapToDto(Event @event)
+     private EventDto MapToDto(Event @event) => new()
      {
-          return new EventDto
-          {
-               Id = @event.Id,
-               Title = @event.Title,
-               Description = @event.Description,
-               StartDate = @event.StartDate,
-               EndDate = @event.EndDate,
-               Location = @event.Location,
-               MaxParticipants = @event.MaxParticipants,
-               PollCount = @event.Polls?.Count ?? 0,
-               CreatedAt = @event.CreatedAt,
-               IsActive = @event.IsActive
-          };
-     }
+          Id = @event.Id,
+          Title = @event.Title,
+          Description = @event.Description,
+          StartDate = @event.StartDate,
+          EndDate = @event.EndDate,
+          Location = @event.Location,
+          MaxParticipants = @event.MaxParticipants,
+          PollCount = @event.Polls?.Count ?? 0,
+          CreatedAt = @event.CreatedAt,
+          IsActive = @event.IsActive,
+          OrganizerId = @event.OrganizerId
+     };
 }

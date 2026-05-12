@@ -67,20 +67,6 @@ public class VoteService : IVoteService
           }
      }
 
-     public async Task DeleteVoteAsync(int id)
-     {
-          try
-          {
-               await _voteRepository.DeleteAsync(id);
-               _logger.LogInformation("Vote {VoteId} deleted successfully", id);
-          }
-          catch (Exception ex)
-          {
-               _logger.LogError(ex, "Error deleting vote {VoteId}", id);
-               throw;
-          }
-     }
-
      public async Task<IEnumerable<Vote>> GetRecentVotesAsync(int pollId, int count = 10)
      {
           try
