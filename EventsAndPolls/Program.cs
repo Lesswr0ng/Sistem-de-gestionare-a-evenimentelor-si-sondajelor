@@ -62,6 +62,7 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddScoped<IEventRepository, EventRepository>();
 builder.Services.AddScoped<IPollRepository, PollRepository>();
 builder.Services.AddScoped<IVoteRepository, VoteRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 // ── Observer ────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<PollEventPublisher>();
@@ -84,6 +85,7 @@ builder.Services.AddScoped<PollCommandInvoker>();
 
 builder.Services.AddScoped<IEventService, EventService>();
 builder.Services.AddScoped<IVoteService, VoteService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 builder.Services.AddScoped<IPollService>(provider =>
 {

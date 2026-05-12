@@ -12,7 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
      public DbSet<Poll> Polls { get; set; }
      public DbSet<PollOption> PollOptions { get; set; }
      public DbSet<Vote> Votes { get; set; }
-     public DbSet<PollOptionGroup> PollOptionGroups { get; set; }
+     public DbSet<Notification> Notifications { get; set; }
 
      protected override void OnModelCreating(ModelBuilder modelBuilder)
      {
@@ -92,6 +92,19 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                      .WithMany(p => p.OptionGroups)
                      .HasForeignKey(g => g.PollId)
                      .OnDelete(DeleteBehavior.Cascade);
+          });
+
+          modelBuilder.Entity<Notification>(entity =>
+          {
+               entity.HasKey(n => n.Id);
+               entity.Property(n => n.UserId).IsRequired();
+               entity.Property(n => n.Title).IsRequired().HasMaxLength(200);
+               entity.Property(n => n.Body).IsRequired().HasMaxLength(1000);
+               entity.Property(n => n.Type).HasConversion<string>();
+               entity.Property(n => n.Channel).HasConversion<string>();
+
+               entity.HasIndex(n => new { n.UserId, n.IsRead });
+               entity.HasIndex(n => n.CreatedAt);
           });
      }
 }

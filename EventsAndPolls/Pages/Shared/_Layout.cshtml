@@ -6,10 +6,67 @@
      <title>@ViewData["Title"] - Events & Polls</title>
      <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
      <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+     <style>
+          .notification-bell {
+               position: relative;
+               cursor: pointer;
+          }
+
+          .notification-badge {
+               position: absolute;
+               top: -6px;
+               right: -8px;
+               background: #dc3545;
+               color: white;
+               border-radius: 50%;
+               font-size: 10px;
+               min-width: 18px;
+               height: 18px;
+               display: flex;
+               align-items: center;
+               justify-content: center;
+               padding: 0 3px;
+          }
+
+          .notification-dropdown {
+               width: 380px;
+               max-height: 480px;
+               overflow-y: auto;
+               right: 0;
+               left: auto;
+          }
+
+          .notification-item {
+               border-bottom: 1px solid #f0f0f0;
+          }
+
+               .notification-item:last-child {
+                    border-bottom: none;
+               }
+
+               .notification-item.unread {
+                    background-color: #f0f7ff;
+               }
+
+               .notification-item .notif-title {
+                    font-weight: 600;
+                    font-size: 0.875rem;
+               }
+
+               .notification-item .notif-body {
+                    font-size: 0.8rem;
+                    color: #555;
+               }
+
+               .notification-item .notif-time {
+                    font-size: 0.75rem;
+                    color: #999;
+               }
+     </style>
 </head>
 <body>
      <header>
-          <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+          <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
                <div class="container-fluid">
                     <a class="navbar-brand" asp-page="/Index">Events & Polls</a>
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
@@ -26,21 +83,50 @@
                               </li>
                          </ul>
 
-                         <ul class="navbar-nav align-items-center">
+                         <ul class="navbar-nav align-items-center gap-2">
                               @if (User.Identity?.IsAuthenticated == true)
                               {
-                                   var displayName = User.FindFirst("DisplayName")?.Value ?? User.Identity.Name;
                                    @if (User.IsInRole("Organizer"))
                                    {
                                         <li class="nav-item">
                                              <span class="nav-link text-success fw-bold">🎯 Organizator</span>
                                         </li>
                                    }
+
+                                   @* Notification Bell *@
+                                   <li class="nav-item dropdown">
+                                        <a class="nav-link notification-bell dropdown-toggle"
+                                           id="notifDropdown" role="button"
+                                           data-bs-toggle="dropdown" aria-expanded="false"
+                                           onclick="loadNotifications()">
+                                             🔔
+                                             <span id="notifBadge" class="notification-badge" style="display:none;">0</span>
+                                        </a>
+                                        <div class="dropdown-menu notification-dropdown p-0" aria-labelledby="notifDropdown">
+                                             <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                                  <strong>Notificări</strong>
+                                                  <button class="btn btn-link btn-sm p-0 text-muted"
+                                                          onclick="markAllRead()">
+                                                       Marchează toate citite
+                                                  </button>
+                                             </div>
+                                             <div id="notifList">
+                                                  <div class="text-center text-muted p-3">Se încarcă...</div>
+                                             </div>
+                                             <div class="text-center border-top p-2">
+                                                  <a asp-page="/Notifications/Index" class="btn btn-link btn-sm">
+                                                       Vezi toate notificările
+                                                  </a>
+                                             </div>
+                                        </div>
+                                   </li>
+
                                    <li class="nav-item">
-                                        <span class="nav-link text-muted small">@displayName</span>
+                                        <span class="nav-link text-muted small">
+                                             @(User.FindFirst("DisplayName")?.Value ?? User.Identity.Name)
+                                        </span>
                                    </li>
                                    <li class="nav-item">
-                                        @* antiforgery token is injected automatically by asp-page tag helper *@
                                         <form method="post" asp-page="/Account/Logout">
                                              @Html.AntiForgeryToken()
                                              <button type="submit" class="btn btn-outline-secondary btn-sm">
@@ -79,6 +165,81 @@
      <script src="~/lib/jquery/dist/jquery.min.js"></script>
      <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
      <script src="~/js/site.js" asp-append-version="true"></script>
+
+     @if (User.Identity?.IsAuthenticated == true)
+     {
+          <script>
+               // Poll unread count every 30 seconds
+               async function updateBadge() {
+                   try {
+                       const res = await fetch('/api/notifications/unread-count');
+                       if (!res.ok) return;
+                       const { count } = await res.json();
+                       const badge = document.getElementById('notifBadge');
+                       if (count > 0) {
+                           badge.textContent    = count > 99 ? '99+' : count;
+                           badge.style.display  = 'flex';
+                       } else {
+                           badge.style.display  = 'none';
+                       }
+                   } catch {}
+               }
+
+               async function loadNotifications() {
+                   try {
+                       const res  = await fetch('/api/notifications');
+                       if (!res.ok) return;
+                       const list = await res.json();
+                       const container = document.getElementById('notifList');
+
+                       if (!list.length) {
+                           container.innerHTML = '<div class="text-center text-muted p-3">Nu ai notificări.</div>';
+                           return;
+                       }
+
+                       container.innerHTML = list.slice(0, 8).map(n => `
+                           <div class="notification-item p-3 ${n.isRead ? '' : 'unread'}"
+                                onclick="readAndNavigate(${n.id}, ${n.relatedPollId ?? 'null'}, ${n.relatedEventId ?? 'null'})"
+                                style="cursor:pointer">
+                               <div class="notif-title">${n.title}</div>
+                               <div class="notif-body">${n.body}</div>
+                               <div class="notif-time">${formatTime(n.createdAt)}</div>
+                           </div>
+                       `).join('');
+
+                       updateBadge();
+                   } catch {}
+               }
+
+               async function readAndNavigate(id, pollId, eventId) {
+                   await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+                   updateBadge();
+                   if (pollId) window.location.href = `/Polls/Details?id=${pollId}`;
+                   else if (eventId) window.location.href = `/Events/Details/${eventId}`;
+               }
+
+               async function markAllRead() {
+                   await fetch('/api/notifications/read-all', { method: 'POST' });
+                   updateBadge();
+                   loadNotifications();
+               }
+
+               function formatTime(dateStr) {
+                   const d = new Date(dateStr);
+                   const now = new Date();
+                   const diff = Math.floor((now - d) / 60000); // minutes
+                   if (diff < 1) return 'Acum';
+                   if (diff < 60) return `Acum ${diff} min`;
+                   if (diff < 1440) return `Acum ${Math.floor(diff / 60)} ore`;
+                   return d.toLocaleDateString('ro-RO');
+               }
+
+               // Initial badge load + poll every 30s
+               updateBadge();
+               setInterval(updateBadge, 30000);
+          </script>
+     }
+
      @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

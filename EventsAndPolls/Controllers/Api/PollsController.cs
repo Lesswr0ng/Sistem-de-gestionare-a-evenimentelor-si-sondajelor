@@ -18,17 +18,22 @@ public class PollsController : ControllerBase
      private readonly ILogger<PollsController> _logger;
      private readonly PollCommandInvoker _invoker;
      private readonly ILoggerFactory _loggerFactory;
+     private readonly INotificationService _notificationService;
 
      public PollsController(
          IPollService pollService,
          IPollRepository pollRepository,
          PollCommandInvoker invoker,
          ILoggerFactory loggerFactory,
-         ILogger<PollsController> logger)
+         ILogger<PollsController> logger,
+         INotificationService notificationService)
      {
           _pollService = pollService;
           _pollRepository = pollRepository;
           _logger = logger;
+          _invoker = invoker;
+          _loggerFactory = loggerFactory;
+          _notificationService = notificationService;
      }
 
      [HttpGet("{id}")]
@@ -91,6 +96,34 @@ public class PollsController : ControllerBase
 
                await _invoker.ExecuteAsync(cmd);
 
+               var scopeFactory = HttpContext.RequestServices.GetRequiredService<IServiceScopeFactory>();
+               var capturedOrganizerId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+               var capturedPollId = cmd.Result!.Id;
+               var capturedEventId = cmd.Result!.EventId;
+
+               _ = Task.Run(async () =>
+               {
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    try
+                    {
+                         var pollService = scope.ServiceProvider.GetRequiredService<IPollService>();
+                         var eventService = scope.ServiceProvider.GetRequiredService<IEventService>();
+                         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+                         var poll = await pollService.GetPollByIdAsync(capturedPollId);
+                         var @event = await eventService.GetEventByIdAsync(capturedEventId);
+
+                         if (poll != null)
+                              await notificationService.NotifyPollCreatedAsync(
+                                  poll, @event?.Title ?? string.Empty,
+                                  new List<string> { capturedOrganizerId });
+                    }
+                    catch (Exception ex)
+                    {
+                         _logger.LogError(ex, "Notification error after poll creation");
+                    }
+               });
+
                return CreatedAtAction(nameof(GetPoll), new { id = cmd.Result!.Id }, cmd.Result);
           }
           catch (Exception ex)
@@ -104,10 +137,43 @@ public class PollsController : ControllerBase
      [Authorize(Roles = Roles.Organizer)]
      public async Task<IActionResult> UpdatePoll(int id, [FromBody] UpdatePollDto dto)
      {
+          var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
           try
           {
                dto.Id = id;
                var poll = await _pollService.UpdatePollAsync(dto);
+
+               if (!poll.IsActive)
+               {
+                    var scopeFactory = HttpContext.RequestServices
+                        .GetRequiredService<IServiceScopeFactory>();
+                    var capturedUserId = userId;
+                    var capturedPollId = id;
+
+                    _ = Task.Run(async () =>
+                    {
+                         // Create a new scope with its own DbContext — not the disposed one
+                         await using var scope = scopeFactory.CreateAsyncScope();
+                         try
+                         {
+                              var pollService = scope.ServiceProvider.GetRequiredService<IPollService>();
+                              var eventService = scope.ServiceProvider.GetRequiredService<IEventService>();
+                              var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+                              var freshPoll = await pollService.GetPollResultsAsync(capturedPollId);
+                              var @event = await eventService.GetEventByIdAsync(freshPoll.EventId);
+                              var organizerId = @event?.OrganizerId ?? string.Empty;
+
+                              await notificationService.NotifyVoteCastAsync(freshPoll, capturedUserId, organizerId);
+                         }
+                         catch (Exception ex)
+                         {
+                              _logger.LogError(ex, "Notification error after vote");
+                         }
+                    });
+               }
+
                return Ok(poll);
           }
           catch (ArgumentException ex)
@@ -222,6 +288,34 @@ public class PollsController : ControllerBase
 
                dto.PollId = id;
                var result = await _pollService.CastVoteAsync(dto, userId);
+
+               var scopeFactory = HttpContext.RequestServices
+                   .GetRequiredService<IServiceScopeFactory>();
+               var capturedUserId = userId;
+               var capturedPollId = id;
+
+               _ = Task.Run(async () =>
+               {
+                    // Create a new scope with its own DbContext — not the disposed one
+                    await using var scope = scopeFactory.CreateAsyncScope();
+                    try
+                    {
+                         var pollService = scope.ServiceProvider.GetRequiredService<IPollService>();
+                         var eventService = scope.ServiceProvider.GetRequiredService<IEventService>();
+                         var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+                         var freshPoll = await pollService.GetPollResultsAsync(capturedPollId);
+                         var @event = await eventService.GetEventByIdAsync(freshPoll.EventId);
+                         var organizerId = @event?.OrganizerId ?? string.Empty;
+
+                         await notificationService.NotifyVoteCastAsync(freshPoll, capturedUserId, organizerId);
+                    }
+                    catch (Exception ex)
+                    {
+                         _logger.LogError(ex, "Notification error after vote");
+                    }
+               });
+
                return Ok(result);
           }
           catch (InvalidOperationException ex)

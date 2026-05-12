@@ -1,12 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using EventsAndPolls.Domain.Entities;
 
-namespace EventsAndPolls.Domain.Interfaces
+namespace EventsAndPolls.Domain.Interfaces;
+
+public interface INotificationRepository
 {
-     internal interface INotificationRepository
-     {
-     }
+     Task AddAsync(Notification notification);
+     Task<IEnumerable<Notification>> GetByUserIdAsync(string userId, bool unreadOnly = false);
+     Task<int> GetUnreadCountAsync(string userId);
+     Task MarkAsReadAsync(int notificationId, string userId);
+     Task MarkAllAsReadAsync(string userId);
 }

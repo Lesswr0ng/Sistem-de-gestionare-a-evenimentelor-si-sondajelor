@@ -1,0 +1,111 @@
+﻿@page
+@{
+     Layout = "_Layout";
+     ViewData["Title"] = "Notificările mele";
+}
+
+<div class="container mt-4">
+     <div class="d-flex justify-content-between align-items-center mb-4">
+          <h1>🔔 Notificările mele</h1>
+          <button class="btn btn-outline-secondary" onclick="markAllRead()">
+               ✓ Marchează toate citite
+          </button>
+     </div>
+
+     <div id="notifContainer">
+          <div class="text-center">
+               <div class="spinner-border text-primary" role="status"></div>
+          </div>
+     </div>
+</div>
+
+@section Scripts {
+     <script>
+          async function loadNotifications() {
+              const container = document.getElementById('notifContainer');
+              try {
+                  const res  = await fetch('/api/notifications');
+                  if (!res.ok) throw new Error('Eroare');
+                  const list = await res.json();
+
+                  if (!list.length) {
+                      container.innerHTML = `
+                          <div class="text-center py-5">
+                              <p class="lead text-muted">Nu ai notificări momentan.</p>
+                              <a href="/Events" class="btn btn-primary">Vezi evenimente</a>
+                          </div>`;
+                      return;
+                  }
+
+                  container.innerHTML = list.map(n => `
+                      <div class="card mb-2 ${n.isRead ? '' : 'border-primary'}"
+                           id="notif-${n.id}">
+                          <div class="card-body py-3">
+                              <div class="d-flex justify-content-between align-items-start">
+                                  <div class="flex-grow-1">
+                                      <div class="d-flex align-items-center gap-2 mb-1">
+                                          ${!n.isRead ? '<span class="badge bg-primary">Nou</span>' : ''}
+                                          <strong>${n.title}</strong>
+                                      </div>
+                                      <p class="mb-1 text-muted">${n.body}</p>
+                                      <small class="text-muted">${formatTime(n.createdAt)}</small>
+                                  </div>
+                                  <div class="d-flex gap-2 ms-3">
+                                      ${n.relatedPollId
+                                          ? `<a href="/Polls/Details?id=${n.relatedPollId}"
+                                                class="btn btn-sm btn-outline-primary"
+                                                onclick="markRead(${n.id})">
+                                                 Vezi sondaj
+                                             </a>`
+                                          : n.relatedEventId
+                                              ? `<a href="/Events/Details/${n.relatedEventId}"
+                                                    class="btn btn-sm btn-outline-primary"
+                                                    onclick="markRead(${n.id})">
+                                                     Vezi eveniment
+                                                 </a>`
+                                              : ''}
+                                      ${!n.isRead
+                                          ? `<button class="btn btn-sm btn-outline-secondary"
+                                                     onclick="markRead(${n.id})">
+                                                 ✓
+                                             </button>`
+                                          : ''}
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  `).join('');
+
+              } catch {
+                  container.innerHTML =
+                      '<div class="alert alert-danger">Eroare la încărcarea notificărilor.</div>';
+              }
+          }
+
+          async function markRead(id) {
+              await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+              const card = document.getElementById(`notif-${id}`);
+              if (card) card.classList.remove('border-primary');
+          }
+
+          async function markAllRead() {
+              await fetch('/api/notifications/read-all', { method: 'POST' });
+              loadNotifications();
+          }
+
+          function formatTime(dateStr) {
+              const d = new Date(dateStr);
+              const now = new Date();
+              const diff = Math.floor((now - d) / 60000);
+              if (diff < 1) return 'Acum';
+              if (diff < 60) return `Acum ${diff} min`;
+              if (diff < 1440) return `Acum ${Math.floor(diff / 60)} ore`;
+              return d.toLocaleDateString('ro-RO', {
+                  day: '2-digit', month: 'long', year: 'numeric',
+                  hour: '2-digit', minute: '2-digit'
+              });
+          }
+
+          loadNotifications();
+     </script>
+}
